@@ -1,0 +1,9 @@
+{
+  "buildmod",
+  "buildsys",
+  "craftos-bin",
+  "modctl",
+  "modular-kernel",
+  "shell",
+  "sudo",
+}
