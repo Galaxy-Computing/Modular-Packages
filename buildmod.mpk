@@ -1,0 +1,17 @@
+return {
+  [ "main.lua" ] = "local tArgs = {...}\
+local filelist = fs.list(module.getPath(tArgs[1]))\
+local package = {}\
+for i,path in ipairs(filelist) do\
+    if not fs.isDir(module.getPath(tArgs[1])..\"/\"..path) then\
+        local f = fs.open(module.getPath(tArgs[1])..\"/\"..path,\"r\")\
+        package[path] = f.readAll()\
+        f.close()\
+        print(\"[\"..i..\"/\"..#filelist..\"] Packaged \"..module.getPath(tArgs[1])..\"/\"..path)\
+    end\
+end\
+local f = fs.open(tArgs[2],\"w\")\
+f.write(\"return \"..textutils.serialize(package))\
+f.close()",
+  [ "meta.lua" ] = "return {\"buildmod\",true,\"1.0-1\",false}",
+}

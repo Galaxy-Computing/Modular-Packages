@@ -1,0 +1,127 @@
+return {
+  [ "meta.lua" ] = "return {\"modular-kernel\",false,\"1.0-1\",true}",
+  [ "kernel.lua" ] = "-- modular-kernel module\
+_G.module = {}\
+\
+function module.getPath(name)\
+    return \"/modular/modules/\"..name\
+end\
+function module.run(name)\
+    return shell.run(module.getPath(name)..\"/main.lua\")\
+end\
+\
+function module.isExecutable(name)\
+    return fs.exists(module.getPath(name)..\"/main.lua\")\
+end\
+\
+function module.list()\
+    return fs.list(\"/modular/modules\")\
+end\
+\
+function module.exists(name)\
+    return fs.isDir(module.getPath(name))\
+end\
+\
+function module.meta(name)\
+    return dofile(module.getPath(name)..\"/meta.lua\")\
+end\
+\
+function module.version(name)\
+    return module.meta(name)[3]\
+end\
+\
+function module.sysversion()\
+    return \"Modular OS modular-kernel \"..module.version(\"modular-kernel\")\
+end\
+\
+function os.version()\
+    return module.sysversion()\
+end\
+\
+function module.loadConfig()\
+    _G.module.config = {}\
+    for _,path in ipairs(fs.list(\"/modular/config\")) do\
+        local f = fs.open(\"/modular/config/\"..path,\"r\")\
+        local fstring = f.readAll()\
+        f.close()\
+        module.config[path] = textutils.unserialise(fstring)\
+    end\
+end\
+\
+function module.saveConfig()\
+    fs.delete(\"/modular/config/*\")\
+    for key,data in pairs(module.config) do\
+        local f = fs.open(\"/modular/config/\"..key,\"w\")\
+        local fstring = textutils.serialize(data)\
+        f.write(fstring)\
+        f.close()\
+    end\
+end\
+\
+function module.createConfig(name)\
+    module.config[name] = {}\
+    module.saveConfig()\
+end\
+\
+os.forcereboot = os.reboot\
+os.forceshutdown = os.shutdown\
+\
+function os.reboot()\
+    module.saveConfig()\
+    os.forcereboot()\
+end\
+\
+function os.shutdown()\
+    module.saveConfig()\
+    os.forceshutdown()\
+end\
+\
+module.loadConfig()\
+\
+if module.exists(\"craftos-bin\") then\
+    shell.setPath(\".:/modular/modules/craftos-bin\"..string.sub(shell.path(),2))\
+    shell.run(\"/modular/modules/craftos-bin/autocomplete.lua\")\
+end\
+\
+module.currentUser = \"\"\
+\
+if not fs.exists(\"/modular/config/modular-kernel\") then\
+    module.createConfig(\"modular-kernel\")\
+    module.config[\"modular-kernel\"][\"cmdline\"] = \"/modular/modules/shell/main.lua multishell\"\
+end\
+if not fs.exists(\"/modular/config/users\") then\
+    module.createConfig(\"users\")\
+    module.config.users[\"root\"] = {\"\",0}\
+end\
+\
+module.saveConfig()\
+\
+os.pullEventOld = os.pullEvent\
+os.pullEvent = os.pullEventRaw\
+\
+term.clear()\
+term.setCursorPos(1,1)\
+\
+print()\
+print(module.sysversion())\
+print()\
+\
+while module.currentUser == \"\" do\
+    write(\"login: \")\
+    local login = read()\
+    write(\"password: \")\
+    local pass = read(\"\")\
+    if module.config.users[login] then if module.config.users[login][1] == pass then\
+        module.currentUser = login\
+    end end\
+    if module.currentUser == \"\" then\
+        print(\"login incorrect\")\
+    end\
+end\
+\
+os.pullEvent = os.pullEventOld\
+os.pullEventOld = nil\
+\
+shell.run(module.config[\"modular-kernel\"][\"cmdline\"])\
+",
+}

@@ -1,0 +1,9 @@
+return {
+  [ "main.lua" ] = "fs.delete(\"/out\")\
+fs.makeDir(\"/out\")\
+for _,mod in ipairs(module.list()) do\
+    print(\"- \"..mod)\
+    shell.run(\"buildmod \"..mod..\" /out/\"..mod..\".mpk\")\
+end",
+  [ "meta.lua" ] = "return {\"buildsys\",true,\"1.0-1\",false}",
+}

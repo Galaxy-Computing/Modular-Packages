@@ -1,0 +1,90 @@
+return {
+  [ "main.lua" ] = "-- modctl\
+\
+if module.config.users[module.currentUser][2] ~= 0 then\
+    print(\"modctl: must be ran as root\")\
+    return\
+end\
+\
+local tArgs = {...}\
+if #tArgs <= 1 then\
+    print(\"modctl usage\")\
+    print(\"modctl q [module] - get module information\")\
+    print(\"modctl u [module] - uninstall module\")\
+    print(\"modctl i [file] - install module from package (or install all packages in a directory)\")\
+    return\
+end\
+\
+if tArgs[1] == \"q\" then\
+    if tArgs[2] == \"*\" then\
+        for _,v in ipairs(module.list()) do\
+            local meta = module.meta(v)\
+            print(v)\
+            print(\"- executable: \"..tostring(meta[2]))\
+            print(\"- version: \"..meta[3])\
+        end\
+        return\
+    end\
+    if module.exists(tArgs[2]) then\
+        local meta = module.meta(tArgs[2])\
+        print(tArgs[2])\
+        print(\"- executable: \"..tostring(meta[2]))\
+        print(\"- version: \"..meta[3])\
+    else print(\"Module not installed\") end\
+    return\
+end\
+\
+if tArgs[1] == \"u\" then\
+    if module.exists(tArgs[2]) then\
+        local meta = module.meta(tArgs[2])\
+        if meta[4] then\
+            print(\"WARNING! This is a system module, uninstalling it could break the system.\")\
+        end\
+        write(\"Are you sure you want to uninstall module \"..tArgs[2]..\"? (y/N) \")\
+        if tArgs[3] then if tArgs[3] == \"y\" then\
+            fs.delete(module.getPath(tArgs[2]))\
+            print()\
+            print(\"Done.\")\
+            return\
+        end end\
+        if string.lower(read()) == \"y\" then\
+            fs.delete(module.getPath(tArgs[2]))\
+            print(\"Done.\")\
+            return\
+        end\
+        print(\"Canceled.\")\
+    else print(\"Module not installed\") end\
+    return\
+end\
+\
+if tArgs[1] == \"i\" then\
+    if fs.exists(tArgs[2]) then\
+        if fs.isDir(tArgs[2]) then\
+            for _,package in ipairs(fs.list(tArgs[2])) do\
+                shell.run(\"modctl i \"..tArgs[2]..\"/\"..package..\" y\")\
+            end\
+        else\
+            print(\"Parsing metadata...\")\
+            local files = dofile(tArgs[2])\
+            local meta = loadstring(files[\"meta.lua\"])()\
+            write(\"Are you sure you want to install module \"..meta[1]..\"? (Y/n) \")\
+            if not tArgs[3] then \
+                if string.lower(read()) == \"n\" then print(\"Canceled.\") return end\
+            elseif tArgs[3] ~= \"y\" then\
+                if string.lower(read()) == \"n\" then print(\"Canceled.\") return end\
+            else print() end\
+            fs.makeDir(module.getPath(meta[1]))\
+            for path,data in pairs(files) do\
+                path = module.getPath(meta[1]..\"/\")..path\
+                local f = fs.open(path,\"w\")\
+                f.write(data)\
+                f.close()\
+                print(\"- \"..path)\
+            end\
+            print(\"Done.\")\
+        end\
+    else print(\"File does not exist\") end\
+    return\
+end",
+  [ "meta.lua" ] = "return {\"modctl\",true,\"1.0-1\",true}",
+}

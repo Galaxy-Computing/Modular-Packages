@@ -1,0 +1,4640 @@
+return {
+  [ "uname.lua" ] = "print(module.sysversion()..\" \".._HOST)",
+  [ "env.lua" ] = "-- SPDX-FileCopyrightText: 2019 JackMacWindows\
+--\
+-- SPDX-License-Identifier: MIT\
+\
+if shell.environment == nil then error(\"Requires the cash shell.\") end\
+local args = {...}\
+\
+local env = setmetatable({}, {__index = _ENV})\
+local path = shell.path()\
+local unset = {}\
+local cmd = {}\
+local cmdargs = false\
+local nextarg\
+\
+for k,v in ipairs(args) do\
+    if nextarg then\
+        if nextarg == 1 then path = v\
+        elseif nextarg == 2 then table.insert(unset, v) end\
+        nextarg = nil\
+    elseif cmdargs then \
+        table.insert(cmd, v) \
+    else\
+        if v == \"-i\" then setmetatable(env, {__index = _G})\
+        elseif v == \"-P\" then nextarg = 1\
+        elseif v == \"-u\" then nextarg = 2\
+        elseif string.find(v, \"=\") then env[string.sub(v, 1, string.find(v, \"=\") - 1)] = string.sub(v, string.find(v, \"=\") + 1)\
+        else table.insert(cmd, v); cmdargs = true end\
+    end\
+end\
+\
+if #unset > 0 then\
+    local oldidx = getmetatable(env).__index\
+    local u = {}\
+    for k,v in ipairs(unset) do u[v] = true end\
+    setmetatable(env, {__index = function(self, name) if u[name] then return nil else return oldidx[name] end end})\
+end\
+\
+local oldPath = shell.path()\
+local oldEnv = shell.environment()\
+shell.setPath(path)\
+shell.setEnvironment(env)\
+shell.run(table.unpack(cmd))\
+shell.setPath(oldPath)\
+shell.setEnvironment(oldEnv)",
+  [ "monitor.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local function printUsage()\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage:\")\
+    print(\"  \" .. programName .. \" <name> <program> <arguments>\")\
+    print(\"  \" .. programName .. \" scale <name> <scale>\")\
+    return\
+end\
+\
+local tArgs = { ... }\
+if #tArgs < 2 or tArgs[1] == \"scale\" and #tArgs < 3 then\
+    printUsage()\
+    return\
+end\
+\
+if tArgs[1] == \"scale\" then\
+    local sName = tArgs[2]\
+    if peripheral.getType(sName) ~= \"monitor\" then\
+        print(\"No monitor named \" .. sName)\
+        return\
+    end\
+\
+    local nRes = tonumber(tArgs[3])\
+    if nRes == nil or nRes < 0.5 or nRes > 5 then\
+        print(\"Invalid scale: \" .. tArgs[3])\
+        return\
+    end\
+\
+    peripheral.call(sName, \"setTextScale\", nRes)\
+    return\
+end\
+\
+local sName = tArgs[1]\
+if peripheral.getType(sName) ~= \"monitor\" then\
+    print(\"No monitor named \" .. sName)\
+    return\
+end\
+\
+local sProgram = tArgs[2]\
+\
+local sPath = shell.resolveProgram(sProgram)\
+if sPath == nil then\
+    print(\"No such program: \" .. sProgram)\
+    return\
+end\
+\
+print(\"Running \" .. sProgram .. \" on monitor \" .. sName)\
+\
+local monitor = peripheral.wrap(sName)\
+local previousTerm = term.redirect(monitor)\
+\
+local co = coroutine.create(function()\
+    (shell.execute or shell.run)(sProgram, table.unpack(tArgs, 3))\
+end)\
+\
+local function resume(...)\
+    local ok, param = coroutine.resume(co, ...)\
+    if not ok then\
+        printError(param)\
+    end\
+    return param\
+end\
+\
+local timers = {}\
+\
+local ok, param = pcall(function()\
+    local sFilter = resume()\
+    while coroutine.status(co) ~= \"dead\" do\
+        local tEvent = table.pack(os.pullEventRaw())\
+        if sFilter == nil or tEvent[1] == sFilter or tEvent[1] == \"terminate\" then\
+            sFilter = resume(table.unpack(tEvent, 1, tEvent.n))\
+        end\
+        if coroutine.status(co) ~= \"dead\" and (sFilter == nil or sFilter == \"mouse_click\") then\
+            if tEvent[1] == \"monitor_touch\" and tEvent[2] == sName then\
+                timers[os.startTimer(0.1)] = { tEvent[3], tEvent[4] }\
+                sFilter = resume(\"mouse_click\", 1, table.unpack(tEvent, 3, tEvent.n))\
+            end\
+        end\
+        if coroutine.status(co) ~= \"dead\" and (sFilter == nil or sFilter == \"term_resize\") then\
+            if tEvent[1] == \"monitor_resize\" and tEvent[2] == sName then\
+                sFilter = resume(\"term_resize\")\
+            end\
+        end\
+        if coroutine.status(co) ~= \"dead\" and (sFilter == nil or sFilter == \"mouse_up\") then\
+            if tEvent[1] == \"timer\" and timers[tEvent[2]] then\
+                sFilter = resume(\"mouse_up\", 1, table.unpack(timers[tEvent[2]], 1, 2))\
+                timers[tEvent[2]] = nil\
+            end\
+        end\
+    end\
+end)\
+\
+term.redirect(previousTerm)\
+if not ok then\
+    printError(param)\
+end\
+",
+  [ "exit.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+shell.exit()\
+",
+  [ "meta.lua" ] = "return {\"craftos-bin\",false,\"1.9:1.0-1\",true}",
+  [ "bg.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+if not shell.openTab then\
+    printError(\"Requires multishell\")\
+    return\
+end\
+\
+local tArgs = { ... }\
+if #tArgs > 0 then\
+    shell.openTab(table.unpack(tArgs))\
+else\
+    shell.openTab(\"shell\")\
+end\
+",
+  [ "apis.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tApis = {}\
+for k, v in pairs(_G) do\
+    if type(k) == \"string\" and type(v) == \"table\" and k ~= \"_G\" then\
+        table.insert(tApis, k)\
+    end\
+end\
+table.insert(tApis, \"shell\")\
+table.insert(tApis, \"package\")\
+if multishell then\
+    table.insert(tApis, \"multishell\")\
+end\
+table.sort(tApis)\
+\
+textutils.pagedTabulate(tApis)\
+",
+  [ "import.lua" ] = "-- SPDX-FileCopyrightText: 2022 The CC: Tweaked Developers\
+--\
+-- SPDX-License-Identifier: MPL-2.0\
+\
+require \"cc.completion\"\
+\
+print(\"Drop files to transfer them to this computer\")\
+\
+local files\
+while true do\
+    local event, arg = os.pullEvent()\
+    if event == \"file_transfer\" then\
+        files = arg.getFiles()\
+        break\
+    elseif event == \"key\" and arg == keys.q then\
+        return\
+    end\
+end\
+\
+if #files == 0 then\
+  printError(\"No files to transfer\")\
+  return\
+end\
+\
+local ok, err = require(\"cc.internal.import\")(files)\
+if not ok and err then printError(err) end\
+",
+  [ "cash.lua" ] = "--[[\
+MIT License\
+\
+Copyright (c) 2019 JackMacWindows\
+\
+Permission is hereby granted, free of charge, to any person obtaining a copy\
+of this software and associated documentation files (the \"Software\"), to deal\
+in the Software without restriction, including without limitation the rights\
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\
+copies of the Software, and to permit persons to whom the Software is\
+furnished to do so, subject to the following conditions:\
+\
+The above copyright notice and this permission notice shall be included in all\
+copies or substantial portions of the Software.\
+\
+THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\
+SOFTWARE.\
+]]--\
+\
+-- To silence IDE warnings\
+kernel = kernel\
+users = users\
+signal = signal\
+\
+local topshell = _ENV.shell\
+local shell = {}\
+local multishell = {}\
+local pack = {}\
+_ENV.package = nil\
+_G.package = nil\
+package = nil\
+_ENV.require = nil\
+_G.require = nil\
+local start_time = os.epoch()\
+local args = {...}\
+local running = true\
+local shell_retval = 0\
+local shell_title = nil\
+local execCommand\
+local shell_env = _ENV\
+local pausedJob\
+local CCKernel2 = kernel and users and kernel.getPID\
+local OpusOS = kernel and kernel.hook\
+\
+if table.maxn == nil then table.maxn = function(t) local i = 1 while t[i] ~= nil do i = i + 1 end return i - 1 end end\
+\
+local function trim(s) return string.match(s, '^()%s*$') and '' or string.match(s, '^%s*(.*%S)') end\
+\
+HOME = \"/\"\
+SHELL = topshell and topshell.getRunningProgram() or \"/usr/bin/cash\"\
+PATH = topshell and string.gsub(topshell.path(), \"%.:\", \"\") or \"/rom/programs:/rom/programs/fun:/rom/programs/rednet\"\
+USER = CCKernel2 and users.getShortName(users.getuid()) or \"root\"\
+EDITOR = \"edit\"\
+OLDPWD = topshell and topshell.dir() or \"/\"\
+PWD = topshell and topshell.dir() or \"/\"\
+SHLVL = SHLVL and SHLVL + 1 or 1\
+TERM = \"craftos\"\
+COLORTERM = \"16color\"\
+\
+local vars = {\
+    PS1 = \"\\\\s-\\\\v\\\\$ \",\
+    PS2 = \"> \",\
+    IFS = \"\\n\",\
+    CASH = topshell and topshell.getRunningProgram() or \"cash.lua\",\
+    CASH_VERSION = \"0.3\",\
+    RANDOM = function() return math.random(0, 32767) end,\
+    SECONDS = function() return math.floor((os.epoch() - start_time) / 1000) end,\
+    HOSTNAME = os.getComputerLabel(),\
+    TERMINATE_QUIT = \"no\",\
+    [\"*\"] = table.concat(args, \" \"),\
+    [\"@\"] = function() return table.concat(args, \" \") end,\
+    [\"#\"] = #args,\
+    [\"?\"] = 0,\
+    [\"0\"] = topshell and topshell.getRunningProgram() or \"cash.lua\",\
+    _ = topshell and topshell.getRunningProgram() or \"cash.lua\",\
+    [\"$\"] = CCKernel2 and kernel.getPID() or (OpusOS and kernel.getCurrent() or 0),\
+}\
+\
+local aliases = topshell and topshell.aliases() or {}\
+local completion = topshell and topshell.getCompletionInfo() or {}\
+local if_table, if_statement = {}, 0\
+local while_table, while_statement = {}, 0\
+local case_table, case_statement = {}, 0\
+local function_name = nil\
+local functions = {}\
+local history = {}\
+local historyfile\
+local run_tokens\
+local function_running = false\
+local should_break = false\
+local no_funcs = false\
+local dirstack = {}\
+local jobs = {}\
+local completed_jobs = {}\
+\
+local builtins\
+builtins = {\
+    [\":\"] = function() return 0 end,\
+    [\".\"] = function(path)\
+        path = fs.exists(path) and path or shell.resolve(path)\
+        local file = io.open(path, \"r\")\
+        if not file then return 1 end\
+        vars.LINENUM = 1\
+        for line in file:lines() do \
+            shell.run(line) \
+            vars.LINENUM = vars.LINENUM + 1\
+        end\
+        vars.LINENUM = nil\
+        file:close()\
+    end,\
+    echo = function(...) print(...); return 0 end,\
+    builtin = function(name, ...) return builtins[name](...) end,\
+    cd = function(dir)\
+        if not fs.isDir(shell.resolve(dir or \"/\")) then \
+            printError(\"cash: cd: \" .. dir .. \": No such file or directory\")\
+            return 1\
+        end\
+        OLDPWD = PWD\
+        PWD = shell.resolve(dir or \"/\") \
+    end,\
+    command = function(...) no_funcs = true; shell.run(...); no_funcs = false; return vars[\"?\"] end,\
+    complete = function() end, -- TODO\
+    eval = function(...) shell.run(...); return vars[\"?\"] end,\
+    exec = function(...) execCommand = table.concat({...}, ' '); shell.exit() end,\
+    exit = shell.exit,\
+    export = function(...)\
+        local vars = {...}\
+        if #vars == 0 or vars[1] == \"-p\" then for k,v in pairs(_ENV) do if type(v) == \"string\" or type(v) == \"number\" then print(\"export \" .. k .. \"=\" .. v) end end else\
+            for k,v in ipairs(vars) do\
+                local kk, vv = string.match(v, \"(.+)=(.+)\")\
+                if not (kk == nil or vv == nil) and (_ENV[kk] == nil or type(_ENV[kk]) == \"string\" or type(_ENV[kk]) == \"number\") then _ENV[kk] = vv end\
+            end\
+        end\
+    end,\
+    history = function(...)\
+        if ({...})[1] == \"-c\" then\
+            historyfile.close()\
+            historyfile = fs.open(CCKernel2 and \"/~/.cash_history\" or \".cash_history\", \"w\")\
+            history = {}\
+            return\
+        end\
+        local lines = {}\
+        for k,v in ipairs(history) do print(\" \" .. k .. string.rep(\" \", math.floor(math.log10(#history)) - math.floor(math.log10(k)) + 2) .. v) end\
+        --textutils.tabulate(table.unpack(lines))\
+    end,\
+    jobs = function(...)\
+        local filter = {...}\
+        for k,v in pairs(jobs) do if v.cmd ~= \"jobs\" then\
+            if #filter == 0 then print(\"[\" .. k .. \"]+  \" .. (v.paused and \"Paused\" or \"Running\") .. \"  \" .. v.cmd) \
+            else for l,w in ipairs(filter) do \
+                if k == w then print(\"[\" .. k .. \"]+  \" .. (v.paused and \"Paused\" or \"Running\") .. \"  \" .. v.cmd) end \
+            end end \
+        end end\
+    end,\
+    pushd = function(newdir)\
+        table.insert(dirstack, PWD)\
+        if newdir then PWD = shell.resolve(newdir) end\
+        write((PWD == \"\" and \"/\" or PWD) .. \" \")\
+        for i = #dirstack, 1, -1 do write((dirstack[i] == \"\" and \"/\" or dirstack[i]) .. \" \") end\
+        print()\
+    end,\
+    popd = function()\
+        if #dirstack == 0 then\
+            printError(\"cash: popd: directory stack empty\")\
+            return -1\
+        end\
+        PWD = table.remove(dirstack, #dirstack)\
+        write((PWD == \"\" and \"/\" or PWD) .. \" \")\
+        for i = #dirstack, 1, -1 do write((dirstack[i] == \"\" and \"/\" or dirstack[i]) .. \" \") end\
+        print()\
+    end,\
+    dirs = function()\
+        write((PWD == \"\" and \"/\" or PWD) .. \" \")\
+        for i = #dirstack, 1, -1 do write((dirstack[i] == \"\" and \"/\" or dirstack[i]) .. \" \") end\
+        print()\
+    end,\
+    pwd = function() print(PWD) end,\
+    read = function(var) -- TODO: expand\
+        vars[var] = read()\
+    end,\
+    set = function(...)\
+        local lvars = {...}\
+        if #lvars == 0 then for k,v in pairs(vars) do print(k .. \"=\" .. v) end else\
+            for k,v in ipairs(lvars) do\
+                if string.find(v, \"=\") then\
+                    local kk, vv = string.match(v, \"(.+)=(.+)\")\
+                    vars[kk] = vv\
+                end\
+            end\
+        end\
+    end,\
+    alias = function(...)\
+        local vars = {...}\
+        if #vars == 0 or vars[1] == \"-p\" then for k,v in pairs(aliases) do print(\"alias \" .. k .. \"=\" .. v) end else\
+            for k,v in ipairs(vars) do\
+                local kk, vv = string.match(v, \"(.+)=(.+)\")\
+                aliases[kk] = vv\
+            end\
+        end\
+    end,\
+    sleep = function(time) sleep(tonumber(time)) end,\
+    test = function(...) -- TODO: add and/or\
+        local args = {...}\
+        if #args < 1 then\
+            printError(\"cash: test: unary operator expected\")\
+            return -1\
+        end\
+        local function n(v) return v end\
+        if args[1] == \"!\" then\
+            table.remove(args, 1)\
+            n = function(v) return not v end\
+        end\
+        if string.sub(args[1], 1, 1) == \"-\" then\
+            if args[2] == nil then return n(true)\
+            elseif args[1] == \"-d\" then return n(fs.exists(shell.resolve(args[2])) and fs.isDir(shell.resolve(args[2])))\
+            elseif args[1] == \"-e\" then return n(fs.exists(shell.resolve(args[2])))\
+            elseif args[1] == \"-f\" then return n(fs.exists(shell.resolve(args[2])) and not fs.isDir(shell.resolve(args[2])))\
+            elseif args[1] == \"-n\" then return n(#args[2] > 0)\
+            elseif args[1] == \"-s\" then return n(fs.getSize(shell.resolve(args[2])) > 0)\
+            elseif args[1] == \"-u\" and type(CCKernel2) == \"table\" then return n(fs.hasPermissions(shell.resolve(args[2]), fs.permissions.setuid))\
+            elseif args[1] == \"-w\" then return n(not fs.isReadOnly(shell.resolve(args[2])))\
+            elseif args[1] == \"-x\" then return n(true)\
+            elseif args[1] == \"-z\" then return n(#args[2] == 0)\
+            else return n(false) end\
+        elseif args[3] and string.sub(args[2], 1, 1) == \"-\" then\
+            if args[2] == \"-eq\" then return n(tonumber(args[1]) == tonumber(args[3]))\
+            elseif args[2] == \"-ne\" then return n(tonumber(args[1]) ~= tonumber(args[3]))\
+            elseif args[2] == \"-lt\" then return n(tonumber(args[1]) < tonumber(args[3]))\
+            elseif args[2] == \"-gt\" then return n(tonumber(args[1]) > tonumber(args[3]))\
+            elseif args[2] == \"-le\" then return n(tonumber(args[1]) <= tonumber(args[3]))\
+            elseif args[2] == \"-ge\" then return n(tonumber(args[1]) >= tonumber(args[3]))\
+            else return n(false) end\
+        elseif args[2] == \"=\" then return n(args[1] == args[3])\
+        elseif args[2] == \"!=\" then return n(args[1] ~= args[3])\
+        else\
+            printError(\"cash: test: unary operator expected\")\
+            return 2\
+        end\
+    end,\
+    [\"true\"] = function() return 0 end,\
+    [\"false\"] = function() return 1 end,\
+    unalias = function(...) for k,v in ipairs({...}) do aliases[v] = nil end end,\
+    unset = function(...) for k,v in ipairs({...}) do vars[v] = nil end end,\
+    wait = function(job)\
+        if job then while jobs[tonumber(job)] ~= nil do sleep(0.1) end\
+        else while table.maxn(jobs) ~= 0 do sleep(0.1) end end\
+    end,\
+    lua = function(...)\
+        if #({...}) > 0 then\
+            if fs.exists(shell.resolve(...)) then\
+                local args = {...}\
+                table.remove(args, 1)\
+                shell.run(shell.resolve(...), table.unpack(args)) \
+            else\
+                local s = table.concat({...}, \" \")\
+                local tEnv = setmetatable({shell = shell, multishell = multishell, package = pack, require = require, _echo = function(...) return ... end}, {__index = _ENV})\
+                local nForcePrint = 0\
+                local func, e = load( s, \"lua\", \"t\", tEnv )\
+                local func2, e2 = load( \"return _echo(\"..s..\");\", \"lua\", \"t\", tEnv )\
+                if not func then\
+                    if func2 then\
+                        func = func2\
+                        e = nil\
+                        nForcePrint = 1\
+                    end\
+                else\
+                    if func2 then\
+                        func = func2\
+                    end\
+                end\
+                if func then\
+                    local tResults = table.pack( pcall( func ) )\
+                    if tResults[1] then\
+                        local n = 1\
+                        while n < tResults.n or (n <= nForcePrint) do\
+                            local value = tResults[ n + 1 ]\
+                            if type( value ) == \"table\" then\
+                                local metatable = getmetatable( value )\
+                                if type(metatable) == \"table\" and type(metatable.__tostring) == \"function\" then\
+                                    print( tostring( value ) )\
+                                else\
+                                    local ok, serialised = pcall( textutils.serialise, value )\
+                                    if ok then\
+                                        print( serialised )\
+                                    else\
+                                        print( tostring( value ) )\
+                                    end\
+                                end\
+                            else\
+                                print( tostring( value ) )\
+                            end\
+                            n = n + 1\
+                        end\
+                    else\
+                        printError( tResults[2] )\
+                    end\
+                else\
+                    printError( e )\
+                end\
+            end\
+        else shell.run(\"/rom/programs/lua.lua\") end\
+    end,\
+    cat = function(...)\
+        for k,v in ipairs({...}) do\
+            local file = fs.open(v, \"r\")\
+            if file ~= nil then\
+                print(file.readAll())\
+                file.close()\
+            end\
+        end\
+    end,\
+    which = function(name) local name, v = shell.resolveProgram(name); if not v and name then print(name) end end,\
+    [\"if\"] = function(...)\
+        shell.run(...)\
+        table.insert(if_table, {cond = vars[\"?\"] == 0, inv = false})\
+    end,\
+    [\"then\"] = function(...) \
+        if if_statement >= table.maxn(if_table) then\
+            printError(\"cash: syntax error near unexpected token `then'\")\
+            return -1\
+        end\
+        if_statement = if_statement + 1\
+        shell.run(...) \
+        return vars[\"?\"]\
+    end,\
+    [\"else\"] = function(...)\
+        if if_statement < 1 or if_table[if_statement].inv then\
+            printError(\"cash: syntax error near unexpected token `else'\")\
+            return -1\
+        end\
+        if_table[if_statement].inv = true\
+        if_table[if_statement].cond = not if_table[if_statement].cond\
+        shell.run(...)\
+        return vars[\"?\"]\
+    end,\
+    fi = function()\
+        if if_statement < 1 then\
+            printError(\"cash: syntax error near unexpected token `fi'\")\
+            return -1\
+        end\
+        table.remove(if_table, if_statement)\
+        if_statement = if_statement - 1\
+    end,\
+    [\"while\"] = function(...)\
+        table.insert(while_table, {cond = {...}, lines = {}})\
+    end,\
+    [\"do\"] = function(...)\
+        if table.maxn(while_table) == 0 then\
+            printError(\"cash: syntax error near unexpected token `do'\")\
+            return -1\
+        end\
+        while_statement = while_statement + 1\
+        shell.run(...)\
+    end,\
+    done = function()\
+        if while_statement < 1 then\
+            printError(\"cash: syntax error near unexpected token `done'\")\
+            return -1\
+        end\
+        while_statement = while_statement - 1\
+        if while_statement == 0 then\
+            local last = table.remove(while_table, while_statement + 1)\
+            if type(last.cond) == \"function\" then last.cond()\
+            else shell.run(table.unpack(last.cond)) end\
+            local cond = vars[\"?\"]\
+            should_break = false\
+            while cond == 0 and not should_break do\
+                for k,v in ipairs(last.lines) do \
+                    if type(v) == \"function\" then v()\
+                    else shell.run(v) end\
+                end\
+                if type(last.cond) == \"function\" then last.cond()\
+                else shell.run(table.unpack(last.cond)) end\
+                cond = vars[\"?\"]\
+            end\
+        end\
+    end,\
+    [\"break\"] = function() should_break = true end,\
+    [\"for\"] = function(...)\
+        local args = {...}\
+        if args[2] ~= \"in\" then\
+            printError(\"cash: missing `in' in for loop\")\
+            return -1\
+        end\
+        local i = 2\
+        table.insert(while_table, {cond = function() i = i + 1; vars[\"?\"] = args[i] ~= nil and 0 or 1 end, lines = {function() vars[args[1]] = args[i] end}})\
+    end,\
+    [\"function\"] = function(name, p)\
+        if function_name ~= nil then\
+            printError(\"cash: syntax error near unexpected token `function'\")\
+            return -1\
+        end\
+        if p ~= \"{\" then\
+            printError(\"cash: syntax error near token `\" .. name .. \"'\")\
+            return -1\
+        end\
+        function_name = name\
+        functions[function_name] = {}\
+    end,\
+    [\"}\"] = function() \
+        if function_name == nil then\
+            printError(\"cash: syntax error near unexpected token `}'\")\
+            return -1\
+        end\
+        function_name = nil \
+    end,\
+    [\"return\"] = function(var)\
+        if function_running == false then\
+            printError(\"cash: syntax error near unexpected token `return'\")\
+            return -1\
+        end\
+        function_running = false\
+        return var\
+    end,\
+    bg = function(t)\
+        if pausedJob then \
+            jobs[pausedJob].isfg = false\
+            jobs[pausedJob].paused = false\
+            if CCKernel2 then kernel.signal(signal.SIGCONT, jobs[pausedJob].pid) end\
+            pausedJob = nil\
+            return 0\
+        elseif tonumber(t) and jobs[tonumber(t)] then\
+            local task = tonumber(t)\
+            jobs[task].isfg = false\
+            jobs[task].paused = false\
+            if CCKernel2 then kernel.signal(signal.SIGCONT, jobs[task].pid) end\
+            return 0\
+        else\
+            printError(\"cash: bg: current: no such job\")\
+            return 1\
+        end\
+    end,\
+    fg = function(t)\
+        if pausedJob then \
+            jobs[pausedJob].isfg = true\
+            jobs[pausedJob].paused = false\
+            if CCKernel2 then kernel.signal(signal.SIGCONT, jobs[pausedJob].pid) end\
+            pausedJob = nil\
+            return 0\
+        elseif tonumber(t) and jobs[tonumber(t)] then\
+            local task = tonumber(t)\
+            jobs[task].isfg = true\
+            jobs[task].paused = false\
+            if CCKernel2 then kernel.signal(signal.SIGCONT, jobs[task].pid) end\
+            return 0\
+        else\
+            printError(\"cash: fg: current: no such job\")\
+            return 1\
+        end\
+    end,\
+}\
+builtins[\"[\"] = builtins.test\
+\
+pack.loaded = {\
+    _G = _G,\
+    bit32 = bit32,\
+    coroutine = coroutine,\
+    math = math,\
+    package = pack,\
+    string = string,\
+    table = table,\
+}\
+pack.loaders = {\
+    function( name )\
+        if pack.preload[name] then\
+            return pack.preload[name]\
+        else\
+            return nil, \"no field package.preload['\" .. name .. \"']\"\
+        end\
+    end,\
+    function( name )\
+        local fname = string.gsub(name, \"%.\", \"/\")\
+        local sError = \"\"\
+        for pattern in string.gmatch(pack.path, \"[^;]+\") do\
+            local sPath = string.gsub(pattern, \"%?\", fname)\
+            if sPath:sub(1,1) ~= \"/\" then\
+                sPath = fs.combine(fs.getDir(vars._), sPath)\
+            end\
+            if fs.exists(sPath) and not fs.isDir(sPath) then\
+                local fnFile, sError = loadfile( sPath, setmetatable({shell = shell, multishell = multishell, package = pack, require = require}, {__index = _ENV}) )\
+                if fnFile then\
+                    return fnFile, sPath\
+                else\
+                    return nil, sError\
+                end\
+            else\
+                if #sError > 0 then\
+                    sError = sError .. \"\\n\"\
+                end\
+                sError = sError .. \"no file '\" .. sPath .. \"'!\"\
+            end\
+        end\
+        return nil, sError\
+    end\
+}\
+pack.preload = {}\
+pack.config = \"/\\n;\\n?\\n!\\n-\"\
+pack.path = \"?;?.lua;?/init.lua;/rom/modules/main/?;/rom/modules/main/?.lua;/rom/modules/main/?/init.lua\"\
+if turtle then\
+    pack.path = pack.path..\";/rom/modules/turtle/?;/rom/modules/turtle/?.lua;/rom/modules/turtle/?/init.lua\"\
+elseif command then\
+    pack.path = pack.path..\";/rom/modules/command/?;/rom/modules/command/?.lua;/rom/modules/command/?/init.lua\"\
+end\
+pack.custom = true\
+\
+local sentinel = {}\
+function require( name )\
+    if type( name ) ~= \"string\" then\
+        error( \"bad argument #1 (expected string, got \" .. type( name ) .. \")\", 2 )\
+    end\
+    if pack.loaded[name] == sentinel then\
+        error(\"Loop detected requiring '\" .. name .. \"'\", 0)\
+    end\
+    if pack.loaded[name] then\
+        return pack.loaded[name]\
+    end\
+\
+    local sError = \"Error loading module '\" .. name .. \"':\"\
+    for n,searcher in ipairs(pack.loaders) do\
+        local loader, err = searcher(name)\
+        if loader then\
+            pack.loaded[name] = sentinel\
+            local result = loader( err )\
+            if result ~= nil then\
+                pack.loaded[name] = result\
+                return result\
+            else\
+                pack.loaded[name] = true\
+                return true\
+            end\
+        else\
+            sError = sError .. \"\\n\" .. err\
+        end\
+    end\
+    error(sError, 2)\
+end\
+\
+function shell.exit(retval)\
+    running = false\
+    shell_retval = retval or 0\
+end\
+\
+function shell.dir()\
+    return PWD\
+end\
+\
+function shell.setDir(path)\
+    OLDPWD = PWD\
+    PWD = path\
+end\
+\
+function shell.path()\
+    return PATH\
+end\
+\
+function shell.setPath(path)\
+    PATH = path\
+end\
+\
+function shell.resolve(localPath)\
+    if string.sub(localPath, 1, 1) == \"/\" then return fs.combine(localPath, \"\")\
+    else return fs.combine(PWD, localPath) end\
+end\
+\
+function shell.resolveProgram(name)\
+    if builtins[name] ~= nil then return name end\
+    if aliases[name] ~= nil then name = aliases[name] end\
+    for path in string.gmatch(PATH, \"[^:]+\") do\
+        if fs.exists(fs.combine(shell.resolve(path), name)) and not fs.isDir(fs.combine(shell.resolve(path), name)) then return fs.combine(shell.resolve(path), name)\
+        elseif fs.exists(fs.combine(shell.resolve(path), name .. \".lua\")) and not fs.isDir(fs.combine(shell.resolve(path), name .. \".lua\")) then return fs.combine(shell.resolve(path), name .. \".lua\") end\
+    end\
+    if fs.exists(shell.resolve(name)) and not fs.isDir(shell.resolve(name)) then return shell.resolve(name), string.find(name, \"/\") == nil end\
+    if fs.exists(shell.resolve(name .. \".lua\")) and not fs.isDir(shell.resolve(name .. \".lua\")) then return shell.resolve(name .. \".lua\"), string.find(name, \"/\") == nil end\
+    return nil\
+end\
+\
+function shell.aliases()\
+    return aliases\
+end\
+\
+function shell.setAlias(alias, program)\
+    aliases[alias] = program\
+end\
+\
+function shell.clearAlias(alias)\
+    aliases[alias] = nil\
+end\
+\
+local function combineArray(dst, src, prefix)\
+    for k,v in ipairs(src) do table.insert(dst, (prefix or \"\") .. v) end\
+    return dst\
+end\
+\
+function shell.programs(showHidden)\
+    local retval = {}\
+    for path in string.gmatch(PATH, \"[^:]+\") do combineArray(retval, fs.find(fs.combine(shell.resolve(path), \"*\"))) end\
+    combineArray(retval, fs.find(fs.combine(PWD, \"*\")), \"./\")\
+    return retval\
+end\
+\
+function shell.getRunningProgram()\
+    return vars._\
+end\
+\
+function shell.complete(prefix)\
+    return fs.complete(prefix, PWD)\
+end\
+\
+function shell.completeProgram(prefix)\
+    if string.find(prefix, \"/\") then\
+        return fs.complete(prefix, PWD, true, false)\
+    else\
+        local retval = {}\
+        for path in string.gmatch(PATH, \"[^:]+\") do combineArray(retval, fs.complete(prefix, path, true, false)) end\
+        return retval\
+    end\
+end\
+\
+function shell.setCompletionFunction(path, completionFunction)\
+    completion[path] = {fnComplete = completionFunction}\
+end\
+\
+function shell.getCompletionInfo()\
+    return completion\
+end\
+\
+function shell.switchTab() end\
+\
+function multishell.getCurrent()\
+    return 1\
+end\
+\
+function multishell.getCount()\
+    return 1\
+end\
+\
+function multishell.setFocus(id)\
+    return id == 1\
+end\
+\
+function multishell.setTitle(title) \
+    shell_title = title   \
+end\
+\
+function multishell.getTitle()\
+    return shell_title\
+end\
+\
+function multishell.getFocus()\
+    return 1\
+end\
+\
+function shell.environment()\
+    return shell_env\
+end\
+\
+function shell.setEnvironment(e)\
+    shell_env = e\
+end\
+\
+local function expandVar(var)\
+    if string.sub(var, 1, 1) ~= \"$\" then return nil end\
+    if string.sub(var, 2, 2) == \"{\" then\
+        local varname = string.sub(string.match(var, \"%b{}\"), 2, -2)\
+        local retval = _ENV[varname] or vars[varname]\
+        if type(retval) == \"function\" then return retval(), #varname + 2 else return retval or \"\", #varname + 2 end\
+    elseif string.sub(var, 2, 3) == \"((\" then\
+        local expr = string.gsub(string.sub(string.match(string.sub(var, 3), \"%b()\"), 2, -2), \"%$\", \"\")\
+        local fn = loadstring(\"return \" .. expr)\
+        local varenv = setmetatable({}, {__index = _ENV})\
+        for k,v in pairs(vars) do varenv[k] = v end\
+        setfenv(fn, varenv)\
+        return tostring(fn()), #expr + 4\
+    elseif tonumber(string.sub(var, 2, 2)) then\
+        local varname = tonumber(string.match(string.sub(var, 2, 2), \"[0-9]+\"))\
+        if varname == 0 then return vars[\"0\"], 1 else return args[varname] or \"\", math.floor(math.log10(varname)) + 1 end\
+    else\
+        local varname = \"\"\
+        for c in string.gmatch(string.sub(var, 2), \".\") do\
+            if c == \" \" then return \"\", #varname end\
+            varname = varname .. c\
+            if _ENV[varname] or vars[varname] then\
+                local retval = _ENV[varname] or vars[varname]\
+                if type(retval) == \"function\" then return retval(), #varname else return retval or \"\", #varname end\
+            end\
+        end\
+        return \"\", #var - 1\
+    end\
+end\
+\
+local function splitSemicolons(cmdline)\
+    local escape = false\
+    local quoted = false\
+    local j = 1\
+    local retval = {\"\"}\
+    local lastc, lastc2\
+    for c in string.gmatch(cmdline, \".\") do\
+        if lastc == '&' and c ~= '&' and lastc2 ~= '&' and not quoted and not escape then\
+            j=j+1\
+            retval[j] = \"\"\
+        end\
+        local setescape = false\
+        if c == '\"' or c == '\\'' and not escape then quoted = not quoted\
+        elseif c == '\\\\' and not quoted and not escape then \
+            setescape = true\
+            escape = true\
+        end\
+        if c == ';' and not quoted and not escape then\
+            j=j+1\
+            retval[j] = \"\"\
+        elseif not (c == ' ' and retval[j] == \"\") then retval[j] = retval[j] .. c end\
+        if not setescape then escape = false end\
+        lastc2 = lastc\
+        lastc = c\
+    end\
+    return retval\
+end\
+\
+local function tokenize(cmdline, noexpand)\
+    -- Expand vars\
+    local singleQuote = false\
+    local escape = false\
+    local expstr = \"\"\
+    local i = 1\
+    local function tostr(v)\
+        if type(v) == \"boolean\" then return v and \"true\" or \"false\"\
+        elseif v == nil then return \"nil\"\
+        elseif type(v) == \"table\" then return textutils.serialize(v)\
+        elseif type(v) == \"string\" then return v\
+        else return tostring(v) end\
+    end\
+    if noexpand then expstr = cmdline else\
+        while i <= #cmdline do\
+            local c = string.sub(cmdline, i, i)\
+            if c == '$' and not escape and not singleQuote then\
+                local s, n = expandVar(string.sub(cmdline, i))\
+                s = tostr(s)\
+                expstr = expstr .. s\
+                i = i + n\
+            else\
+                if c == '\\'' and not escape then singleQuote = not singleQuote end\
+                escape = c == '\\\\' and not escape\
+                expstr = expstr .. c\
+            end\
+            i=i+1\
+        end\
+    end\
+    -- Tokenize\
+    local retval = {{[0] = \"\"}}\
+    i = 0\
+    local j = 1\
+    local quoted = false\
+    escape = false\
+    local lastc\
+    for c in string.gmatch(expstr, \".\") do\
+        if (c == '\"' or c == '\\'') and not escape then quoted = not quoted\
+        elseif c == ' ' and not quoted and not escape then\
+            if #retval[j][i] > 0 then\
+                i=i+1\
+                retval[j][i] = \"\"\
+            end\
+        elseif c == ';' and not quoted and not escape then\
+            j=j+1\
+            i=0\
+            retval[j] = {[0] = \"\"}\
+        elseif lastc == '&' and c == '&' and not quoted and not escape then\
+            retval[j][i] = string.sub(retval[j][i], 1, -2)\
+            j=j+1\
+            i=0\
+            retval[j] = {[0] = \"\", last = 0}\
+        elseif lastc == '|' and c == '|' and not quoted and not escape then\
+            retval[j][i] = string.sub(retval[j][i], 1, -2)\
+            j=j+1\
+            i=0\
+            retval[j] = {[0] = \"\", last = 1}\
+        elseif not (c == '\\\\' and not quoted and not escape) then\
+            retval[j][i] = retval[j][i] .. c \
+        end\
+        escape = c == '\\\\' and not quoted and not escape\
+        lastc = c\
+    end\
+    if lastc == '&' then retval.async = true end\
+    for k,v in ipairs(retval) do if v[0] ~= \"\" then\
+        local path, islocal = shell.resolveProgram(v[0])\
+        path = path or v[0]\
+        if not (islocal and string.find(v[0], \"/\") == nil) then v[0] = path end\
+        v.vars = {}\
+        while v[0] and string.find(v[0], \"=\") do\
+            local l = string.sub(v[0], 1, string.find(v[0], \"=\") - 1)\
+            v.vars[l] = string.sub(v[0], string.find(v[0], \"=\") + 1)\
+            v.vars[l] = tonumber(v.vars[l]) or v.vars[l]\
+            v[0] = nil\
+            for i = 1, table.maxn(v) do v[i-1] = v[i]; v[i] = nil end\
+        end\
+    end end\
+    return retval\
+end\
+\
+local junOff = 31 + 28 + 31 + 30 + 31 + 30\
+local function dayToString(day)\
+    if day <= 31 then return \"Jan \" .. day\
+    elseif day > 31 and day <= 31 + 28 then return \"Feb \" .. day - 31\
+    elseif day > 31 + 28 and day <= 31 + 28 + 31 then return \"Mar \" .. day - 31 - 28\
+    elseif day > 31 + 28 + 31 and day <= 31 + 28 + 31 + 30 then return \"Apr \" .. day - 31 - 28 - 31\
+    elseif day > 31 + 28 + 31 + 30 and day <= 31 + 28 + 31 + 30 + 31 then return \"May \" .. day - 31 - 28 - 31 - 30\
+    elseif day > 31 + 28 + 31 + 30 + 31 and day <= junOff then return \"Jun \" .. day - 31 - 28 - 31 - 30 - 31\
+    elseif day > junOff and day <= junOff + 31 then return \"Jul \" .. day - junOff\
+    elseif day > junOff + 31 and day <= junOff + 31 + 31 then return \"Aug \" .. day - junOff - 31\
+    elseif day > junOff + 31 + 31 and day <= junOff + 31 + 31 + 30 then return \"Sep \" .. day - junOff - 31 - 31\
+    elseif day > junOff + 31 + 31 + 30 and day <= junOff + 31 + 31 + 30 + 31 then return \"Oct \" .. day - junOff - 31 - 31 - 30\
+    elseif day > junOff + 31 + 31 + 30 + 31 and day <= junOff + 31 + 31 + 30 + 31 + 30 then return \"Nov \" .. day - junOff - 31 - 31 - 30 - 31\
+    else return \"Dec \" .. day - junOff - 31 - 31 - 30 - 31 - 30 end\
+end\
+\
+local function getPrompt()\
+    local retval = (if_statement > 0 or while_statement > 0 or case_statement > 0) and vars.PS2 or vars.PS1 or \"\\\\$ \"\
+    for k,v in pairs({\
+        [\"\\\\d\"] = dayToString(os.day()),\
+        [\"\\\\e\"] = string.char(0x1b),\
+        [\"\\\\h\"] = string.sub(os.getComputerLabel() or \"localhost\", 1, string.find(os.getComputerLabel() or \"localhost\", \"%.\")),\
+        [\"\\\\H\"] = os.getComputerLabel() or \"localhost\",\
+        [\"\\\\n\"] = \"\\n\",\
+        [\"\\\\s\"] = string.gsub(fs.getName(vars[\"0\"]), \".lua\", \"\"),\
+        [\"\\\\t\"] = textutils.formatTime(os.time(), true),\
+        [\"\\\\T\"] = textutils.formatTime(os.time(), false),\
+        [\"\\\\u\"] = USER,\
+        [\"\\\\v\"] = vars.CASH_VERSION,\
+        [\"\\\\V\"] = vars.CASH_VERSION,\
+        [\"\\\\w\"] = PWD,\
+        [\"\\\\W\"] = fs.getName(PWD) == \".\" and \"/\" or fs.getName(PWD),\
+        [\"\\\\%#\"] = vars.LINENUM,\
+        [\"\\\\%$\"] = USER == \"root\" and \"#\" or \"$\",\
+        [\"\\\\([0-7][0-7][0-7])\"] = function(n) return string.char(tonumber(n, 8)) end,\
+        [\"\\\\\\\\\"] = \"\\\\\",\
+        [\"\\\\%[.+\\\\%]\"] = \"\"\
+    }) do retval = string.gsub(retval, k, v) end\
+    return retval\
+end\
+\
+local function run( _tEnv, _sPath, ... )\
+    if type( _tEnv ) ~= \"table\" then\
+        error( \"bad argument #1 (expected table, got \" .. type( _tEnv ) .. \")\", 2 ) \
+    end\
+    if type( _sPath ) ~= \"string\" then\
+        error( \"bad argument #2 (expected string, got \" .. type( _sPath ) .. \")\", 2 ) \
+    end\
+    local tArgs = table.pack( ... )\
+    local tEnv = _tEnv\
+    local fnFile, err = loadfile( _sPath, tEnv )\
+    if fnFile then\
+        local ok, err = pcall( function()\
+            vars[\"?\"] = fnFile( table.unpack( tArgs, 1, tArgs.n ) )\
+            if vars[\"?\"] == nil or vars[\"?\"] == true then vars[\"?\"] = 0 \
+            elseif vars[\"?\"] == false then vars[\"?\"] = 1 end\
+        end )\
+        if not ok then\
+            if err and err ~= \"\" then\
+                printError( err )\
+            end\
+            vars[\"?\"] = 1\
+            return false\
+        end\
+        return true\
+    end\
+    if err and err ~= \"\" then\
+        printError( err )\
+    end\
+    vars[\"?\"] = 1\
+    return false\
+end\
+\
+local function execv(tokens)\
+    local path = tokens[0]\
+    if path == nil then return end\
+    if #tokens == 0 and string.find(path, \"=\") ~= nil then\
+        local k = string.sub(path, 1, string.find(path, \"=\") - 1)\
+        vars[k] = string.sub(path, string.find(path, \"=\") + 1)\
+        vars[k] = tonumber(vars[k]) or vars[k]\
+        return\
+    end\
+    local oldenv = {}\
+    for k,v in pairs(tokens.vars) do \
+        oldenv[k] = _ENV[k]\
+        _ENV[k] = v \
+    end\
+    if if_statement > 0 and not if_table[if_statement].cond and path ~= \"else\" and path ~= \"elif\" and path ~= \"fi\" then return end\
+    if builtins[path] ~= nil then \
+        vars[\"?\"] = builtins[path](table.unpack(tokens))\
+        if vars[\"?\"] == nil or vars[\"?\"] == true then vars[\"?\"] = 0 \
+        elseif vars[\"?\"] == false then vars[\"?\"] = 1 end\
+    elseif functions[path] ~= nil and not no_funcs then\
+        local oldargs = args\
+        args = tokens\
+        function_running = true\
+        for k,v in ipairs(functions[path]) do \
+            shell.run(v) \
+            if not function_running then break end\
+        end\
+        args = oldargs\
+    else\
+        if not fs.exists(path) then\
+            printError(\"cash: \" .. path .. \": No such file or directory\")\
+            vars[\"?\"] = -1\
+            return\
+        end\
+        if not CCKernel2 then\
+            local file = fs.open(path, \"r\")\
+            local firstLine = file.readLine()\
+            file.close()\
+            if firstLine ~= nil and string.sub(firstLine, 1, 2) == \"#!\" then\
+                table.insert(tokens, 1, path)\
+                path = string.sub(firstLine, 3)\
+                if not fs.exists(path) and fs.exists(path .. \".lua\") then path = path .. \".lua\" end\
+            end\
+        end\
+        local _old = vars._\
+        vars._ = path\
+        run(setmetatable({shell = shell, multishell = multishell, package = pack, require = require, arg = tokens}, {__index = shell_env}), path, table.unpack(tokens)) \
+        vars._ = _old\
+    end\
+    for k,v in pairs(tokens.vars) do _ENV[k] = oldenv[k] end\
+end\
+\
+run_tokens = function(tokens, isAsync)\
+    if tokens.async and not isAsync then\
+        local coro, pid\
+        if CCKernel2 then pid = kernel.fork(\"cash\", function() run_tokens(tokens, true) end)\
+        else coro = coroutine.create(function() run_tokens(tokens, true) end) end\
+        local id = #jobs + 1\
+        jobs[id] = {cmd = tokens[1][0] .. \" \" .. table.concat(tokens[1], \" \"), coro = coro, pid = pid, isfg = false, start = true}\
+        print(\"[\" .. (id) .. \"] \" .. (pid or \"\"))\
+    else\
+        for k,tok in ipairs(tokens) do \
+            if tok[0] then\
+                if trim(tok[0]) ~= \"\" and (tok.last == 0 and vars[\"?\"] == 0) or (tok.last == 1 and vars[\"?\"] ~= 0) or tok.last == nil then\
+                    execv(tok) \
+                end\
+            else\
+                for k,v in pairs(tok.vars) do vars[k] = tonumber(v) or v end\
+            end \
+        end\
+    end\
+    return vars[\"?\"] == 0\
+end\
+\
+local run_tokens_async = function(tokens)\
+    local coro, pid\
+    if CCKernel2 then pid = kernel.fork(\"cash\", function() run_tokens(tokens, true) end)\
+    else coro = coroutine.create(function() run_tokens(tokens, true) end) end\
+    local id = #jobs + 1\
+    jobs[id] = {cmd = tokens[1][0] and (tokens[1][0] .. \" \" .. table.concat(tokens[1], \" \")) or \"cash\", coro = coro, pid = pid, isfg = not tokens.async, start = true}\
+    if tokens.async then print(\"[\" .. (id) .. \"] \" .. (pid or \"\")) end\
+end\
+\
+function shell.run(...)\
+    local cmd = table.concat({...}, \" \")\
+    if cmd == \"\" or string.sub(cmd, 1, 1) == \"#\" then return end\
+    if function_name ~= nil then\
+        if string.find(cmd, \"}\") then function_name = nil\
+        else table.insert(functions[function_name], cmd) end\
+        return true\
+    elseif while_statement > 0 then\
+        local tokens = splitSemicolons(cmd)\
+        for k,line in ipairs(tokens) do \
+            line = string.sub(line, #string.match(line, \"^ *\") + 1)\
+            if line == \"do\" or line == \"done\" or string.find(line, \"^do \") or string.find(line, \"^done \") then run_tokens(tokenize(line)) end\
+            if while_statement > 0 then table.insert(while_table[1].lines, line) end\
+        end\
+        return true\
+    end\
+    local lines = splitSemicolons(cmd)\
+    for k,v in ipairs(lines) do run_tokens(tokenize(v, string.sub(v, 1, 6) == \"while \")) end\
+    return vars[\"?\"] == 0\
+end\
+\
+function shell.runAsync(...)\
+    local cmd = table.concat({...}, \" \")\
+    if cmd == \"\" or string.sub(cmd, 1, 1) == \"#\" then return end\
+    if function_name ~= nil then\
+        if string.find(cmd, \"}\") then function_name = nil\
+        else table.insert(functions[function_name], cmd) end\
+        return true\
+    elseif while_statement > 0 then\
+        local tokens = splitSemicolons(cmd)\
+        for k,line in ipairs(tokens) do \
+            line = string.sub(line, #string.match(line, \"^ *\") + 1)\
+            if line == \"do\" or line == \"done\" or string.find(line, \"^do \") or string.find(line, \"^done \") then run_tokens(tokenize(line)) end\
+            if while_statement > 0 then table.insert(while_table[1].lines, line) end\
+        end\
+        return true\
+    end\
+    local lines = splitSemicolons(cmd)\
+    for k,v in ipairs(lines) do run_tokens_async(tokenize(v, string.sub(v, 1, 6) == \"while \")) end\
+    return vars[\"?\"] == 0\
+end\
+\
+function multishell.launch(environment, path, ...)\
+    local coro, pid\
+    local tok = {[0] = path, ...}\
+    if CCKernel2 then pid = kernel.fork(path, function() execv(tok) end)\
+    else coro = coroutine.create(function() execv(tok) end) end\
+    local id = #jobs + 1\
+    jobs[id] = {cmd = path .. \" \" .. table.concat({...}, \" \"), coro = coro, pid = pid, isfg = false}\
+    return id\
+end\
+\
+function shell.openTab(...)\
+    local cmd = table.concat({...}, \" \")\
+    if cmd == \"\" or string.sub(cmd, 1, 1) == \"#\" then return end\
+    if function_name ~= nil then\
+        if string.find(cmd, \"}\") then function_name = nil\
+        else table.insert(functions[function_name], cmd) end\
+        return true\
+    elseif while_statement > 0 then\
+        local tokens = splitSemicolons(cmd)\
+        for k,line in ipairs(tokens) do \
+            line = string.sub(line, #string.match(line, \"^ *\") + 1)\
+            if line == \"do\" or line == \"done\" or string.find(line, \"^do \") or string.find(line, \"^done \") then run_tokens(tokenize(line)) end\
+            if while_statement > 0 then table.insert(while_table[1].lines, line) end\
+        end\
+        return true\
+    end\
+    local lines = splitSemicolons(cmd)\
+    for k,v in ipairs(lines) do \
+        local tokens = tokenize(v, string.sub(v, 1, 6) == \"while \")\
+        for k,tok in ipairs(tokens) do if tok[0] ~= \"\" then \
+            local coro, pid\
+            if CCKernel2 then pid = kernel.fork(tok[0], function() execv(tok) end)\
+            else coro = coroutine.create(function() execv(tok) end) end\
+            local id = #jobs + 1\
+            jobs[id] = {cmd = tok[0] .. \" \" .. table.concat(tok, \" \"), coro = coro, pid = pid, isfg = false}\
+            print(\"[\" .. (id) .. \"] \" .. (pid or \"\"))\
+        end end\
+    end\
+    return vars[\"?\"] == 0\
+end\
+\
+if args[1] ~= nil then\
+    local path = table.remove(args, 1)\
+    path = fs.exists(path) and path or shell.resolve(path)\
+    local file = io.open(path, \"r\")\
+    if not file then return 1 end\
+    vars.LINENUM = 1\
+    for line in file:lines() do \
+        shell.run(line) \
+        vars.LINENUM = vars.LINENUM + 1\
+        if not running then break end\
+    end\
+    file:close()\
+    vars.LINENUM = nil\
+    return shell_retval\
+end\
+\
+if topshell == nil then shell.run(\"rom/startup.lua\") end\
+\
+if CCKernel2 then\
+    if fs.exists(\"/etc/cashrc\") then\
+        local file = io.open(\"/etc/cashrc\", \"r\")\
+        for line in file:lines() do shell.run(line) end\
+        file:close()\
+    end\
+    local function lines(file) return function() return file.readLine() end end\
+    if fs.exists(\"/~/.cashrc\") then\
+        local file = fs.open(\"/~/.cashrc\", \"r\")\
+        for line in lines(file) do shell.run(line) end\
+        file.close()\
+    end\
+    if fs.exists(\"/~/.cash_history\") then\
+        local file = fs.open(\"/~/.cash_history\", \"r\")\
+        for line in lines(file) do table.insert(history, line) end\
+        file.close()\
+        historyfile = fs.open(\"/~/.cash_history\", \"a\")\
+    else historyfile = fs.open(\"/~/.cash_history\", \"w\") end\
+else\
+    if fs.exists(\".cashrc\") then\
+        local file = io.open(\".cashrc\", \"r\")\
+        for line in file:lines() do shell.run(line) end\
+        file:close()\
+    end\
+    if fs.exists(\".cash_history\") then\
+        local file = io.open(\".cash_history\", \"r\")\
+        for line in file:lines() do table.insert(history, line) end\
+        file:close()\
+        historyfile = fs.open(\".cash_history\", \"a\")\
+    else historyfile = fs.open(\".cash_history\", \"w\") end\
+end\
+\
+local function ansiWrite(str)\
+    local seq = nil\
+    local bold = false\
+    local function getnum(d) \
+        if seq == \"[\" then return d or 1\
+        elseif string.find(seq, \";\") then return \
+            tonumber(string.sub(seq, 2, string.find(seq, \";\") - 1)), \
+            tonumber(string.sub(seq, string.find(seq, \";\") + 1)) \
+        else return tonumber(string.sub(seq, 2)) end \
+    end\
+    for c in string.gmatch(str, \".\") do\
+        if seq == \"\\27\" then\
+            if c == \"c\" then\
+                term.setBackgroundColor(colors.black)\
+                term.setTextColor(colors.white)\
+                term.setCursorBlink(true)\
+            elseif c == \"[\" then seq = \"[\"\
+            else seq = nil end\
+        elseif seq ~= nil and string.sub(seq, 1, 1) == \"[\" then\
+            if tonumber(c) ~= nil or c == ';' then seq = seq .. c else\
+                if c == \"A\" then term.setCursorPos(term.getCursorPos(), select(2, term.getCursorPos()) - getnum())\
+                elseif c == \"B\" then term.setCursorPos(term.getCursorPos(), select(2, term.getCursorPos()) + getnum())\
+                elseif c == \"C\" then term.setCursorPos(term.getCursorPos() + getnum(), select(2, term.getCursorPos()))\
+                elseif c == \"D\" then term.setCursorPos(term.getCursorPos() - getnum(), select(2, term.getCursorPos()))\
+                elseif c == \"E\" then term.setCursorPos(1, select(2, term.getCursorPos()) + getnum())\
+                elseif c == \"F\" then term.setCursorPos(1, select(2, term.getCursorPos()) - getnum())\
+                elseif c == \"G\" then term.setCursorPos(getnum(), select(2, term.getCursorPos()))\
+                elseif c == \"H\" then term.setCursorPos(getnum())\
+                elseif c == \"J\" then term.clear() -- ?\
+                elseif c == \"K\" then term.clearLine() -- ?\
+                elseif c == \"T\" then term.scroll(getnum())\
+                elseif c == \"f\" then term.setCursorPos(getnum())\
+                elseif c == \"m\" then\
+                    local n, m = getnum(0)\
+                    if n == 0 then\
+                        term.setBackgroundColor(colors.black)\
+                        term.setTextColor(colors.white)\
+                    elseif n == 1 then bold = true\
+                    elseif n == 7 or n == 27 then\
+                        local bg = term.getBackgroundColor()\
+                        term.setBackgroundColor(term.getTextColor())\
+                        term.setTextColor(bg)\
+                    elseif n == 22 then bold = false\
+                    elseif n >= 30 and n <= 37 then term.setTextColor(2^(15 - (n - 30) - (bold and 8 or 0)))\
+                    elseif n == 39 then term.setTextColor(colors.white)\
+                    elseif n >= 40 and n <= 47 then term.setBackgroundColor(2^(15 - (n - 40) - (bold and 8 or 0)))\
+                    elseif n == 49 then term.setBackgroundColor(colors.black) end\
+                    if m ~= nil then\
+                        if m == 0 then\
+                            term.setBackgroundColor(colors.black)\
+                            term.setTextColor(colors.white)\
+                        elseif m == 1 then bold = true\
+                        elseif m == 7 or m == 27 then\
+                            local bg = term.getBackgroundColor()\
+                            term.setBackgroundColor(term.getTextColor())\
+                            term.setTextColor(bg)\
+                        elseif m == 22 then bold = false\
+                        elseif m >= 30 and m <= 37 then term.setTextColor(2^(15 - (m - 30) - (bold and 8 or 0)))\
+                        elseif m == 39 then term.setTextColor(colors.white)\
+                        elseif m >= 40 and m <= 47 then term.setBackgroundColor(2^(15 - (m - 40) - (bold and 8 or 0)))\
+                        elseif m == 49 then term.setBackgroundColor(colors.black) end\
+                    end\
+                end\
+                seq = nil\
+            end\
+        elseif c == string.char(0x1b) then seq = \"\\27\"\
+        else write(c) end\
+    end\
+end\
+\
+local function readCommand()\
+    if term.getGraphicsMode and term.getGraphicsMode() then term.setGraphicsMode(false) end\
+    local prompt = getPrompt()\
+    ansiWrite(prompt)\
+    local str = \"\"\
+    local ox, oy = term.getCursorPos()\
+    local coff = 0\
+    local histpos = table.maxn(history) + 1\
+    local lastlen = 0\
+    local waitTab = false\
+    local ly = ({term.getCursorPos()})[2]\
+    local function redrawStr()\
+        term.setCursorPos(ox, oy)\
+        local x, y\
+        local i = 0\
+        for c in string.gmatch(str, \".\") do\
+            if term.getCursorPos() == term.getSize() then\
+                if select(2, term.getCursorPos()) == select(2, term.getSize()) then\
+                    term.scroll(1)\
+                    oy = oy - 1\
+                    term.setCursorPos(1, select(2, term.getCursorPos()))\
+                else term.setCursorPos(1, select(2, term.getCursorPos()) + 1) end\
+            end\
+            if i == coff then x, y = term.getCursorPos() end\
+            term.write(c)\
+            i=i+1\
+        end\
+        if x == nil then x, y = term.getCursorPos() end\
+        for i = 0, lastlen - #str - 1 do write(\" \") end\
+        if term.getCursorPos() == 1 and lastlen > #str then\
+            term.write(\" \")\
+        end\
+        lastlen = #str\
+        ly = ({term.getCursorPos()})[2]\
+        term.setCursorPos(x, y)\
+    end\
+    term.setCursorBlink(true)\
+    while true do\
+        local ev = {os.pullEventRaw()}\
+        if ev[1] == \"key\" then\
+            if ev[2] == keys.enter then break\
+            elseif ev[2] == keys.up and history[histpos-1] ~= nil then \
+                histpos = histpos - 1\
+                str = history[histpos]\
+                coff = #str\
+                waitTab = false\
+            elseif ev[2] == keys.down and history[histpos+1] ~= nil then \
+                histpos = histpos + 1\
+                str = history[histpos]\
+                coff = #str\
+                waitTab = false\
+            elseif ev[2] == keys.down and histpos == table.maxn(history) then\
+                histpos = histpos + 1\
+                str = \"\"\
+                coff = 0\
+                waitTab = false\
+            elseif ev[2] == keys.left and coff > 0 then \
+                coff = coff - 1\
+                waitTab = false\
+            elseif ev[2] == keys.right and coff < #str then \
+                coff = coff + 1\
+                waitTab = false\
+            elseif ev[2] == keys.backspace and coff > 0 then\
+                str = string.sub(str, 1, coff - 1) .. string.sub(str, coff + 1)\
+                coff = coff - 1\
+                waitTab = false\
+            elseif ev[2] == keys.tab and coff == #str then\
+                local tokens = tokenize(str)[1]\
+                -- TODO: FIX THIS\
+                if completion[tokens[0]] ~= nil then\
+                    local t = {}\
+                    for i = 1, table.maxn(tokens) - 1 do t[i] = tokens[i] end\
+                    local res = completion[tokens[0]].fnComplete(shell, table.maxn(tokens), tokens[table.maxn(tokens)], t)\
+                    if res and #res > 0 then\
+                        local longest = res[1]\
+                        local function getLongest(a, b)\
+                            for i = 1, math.min(#a, #b) do if string.sub(a, i, i) ~= string.sub(b, i, i) then return string.sub(a, 1, i-1) end end\
+                            return a \
+                        end\
+                        for k,v in ipairs(res) do longest = getLongest(longest, v) end\
+                        if longest == \"\" then\
+                            if not waitTab then waitTab = true else\
+                                for k,v in ipairs(res) do res[k] = tokens[table.maxn(tokens)] .. v end\
+                                print(\"\")\
+                                textutils.pagedTabulate(res)\
+                                ansiWrite(getPrompt())\
+                                ox, oy = term.getCursorPos()\
+                            end\
+                        else\
+                            str = str .. longest\
+                            coff = #str\
+                            waitTab = false\
+                        end\
+                    end\
+                elseif tokens[1] == nil then\
+                    local res = shell.completeProgram(tokens[0])\
+                    if res and #res > 0 then\
+                        local longest = res[1]\
+                        local function getLongest(a, b)\
+                            for i = 1, math.min(#a, #b) do if string.sub(a, i, i) ~= string.sub(b, i, i) then return string.sub(a, 1, i-1) end end\
+                            return a \
+                        end\
+                        for k,v in ipairs(res) do longest = getLongest(longest, v) end\
+                        if longest == \"\" then\
+                            if not waitTab then waitTab = true else\
+                                for k,v in ipairs(res) do res[k] = string.gsub(fs.getName(tokens[0]), \"%.lua\", \"\") .. v end\
+                                print(\"\")\
+                                textutils.pagedTabulate(res)\
+                                ansiWrite(getPrompt())\
+                                ox, oy = term.getCursorPos()\
+                            end\
+                        else\
+                            str = str .. string.gsub(longest, \"%.lua\", \"\")\
+                            coff = #str\
+                            waitTab = false\
+                        end\
+                    end\
+                else\
+                    local res = fs.complete(tokens[table.maxn(tokens)], PWD, true, true)\
+                    if res and #res > 0 then\
+                        local longest = res[1]\
+                        local function getLongest(a, b)\
+                            for i = 1, math.min(#a, #b) do if string.sub(a, i, i) ~= string.sub(b, i, i) then return string.sub(a, 1, i-1) end end\
+                            return a \
+                        end\
+                        for k,v in ipairs(res) do longest = getLongest(longest, v) end\
+                        if longest == \"\" then\
+                            if not waitTab then waitTab = true else\
+                                for k,v in ipairs(res) do res[k] = fs.getName(tokens[table.maxn(tokens)]) .. v end\
+                                print(\"\")\
+                                textutils.pagedTabulate(res)\
+                                ansiWrite(getPrompt())\
+                                ox, oy = term.getCursorPos()\
+                            end\
+                        else\
+                            str = str .. longest\
+                            coff = #str\
+                            waitTab = false\
+                        end\
+                    end\
+                end\
+            end\
+        elseif ev[1] == \"char\" then\
+            str = string.sub(str, 1, coff) .. ev[2] .. string.sub(str, coff + 1)\
+            coff = coff + 1\
+            waitTab = false\
+        elseif ev[1] == \"paste\" then\
+            str = string.sub(str, 1, coff) .. ev[2] .. string.sub(str, coff + 1)\
+            coff = coff + #ev[2]\
+            waitTab = false\
+        elseif ev[1] == \"terminate\" then\
+            if vars.TERMINATE_QUIT == \"yes\" or vars.terminate_quit == 1 then running = false end\
+            str = \"\"\
+            break\
+        end\
+        redrawStr()\
+    end\
+    if ly >= ({term.getSize()})[2] then\
+        term.scroll(1)\
+        ly = ly - 1\
+    end\
+    term.setCursorPos(1, ly + 1)\
+    term.setCursorBlink(false)\
+    if str ~= \"\" and str ~= history[#history] then\
+        table.insert(history, str)\
+        historyfile.writeLine(str)\
+        historyfile.flush()\
+    end\
+    return str\
+end\
+\
+local function jobManager()\
+    while running do\
+        if CCKernel2 then\
+            local e = {os.pullEventRaw()}\
+            if e[1] == \"process_complete\" then\
+                for k,v in pairs(jobs) do if v.pid == e[2] then \
+                    jobs[k] = nil\
+                    completed_jobs[k] = {err = \"Done\", cmd = v.cmd}\
+                    break\
+                end end\
+            end\
+        else\
+            local delete = {}\
+            local e = {os.pullEventRaw()}\
+            for k,v in pairs(jobs) do\
+                if not v.paused and (v.filter == nil or v.filter == e[1]) and (v.isfg or v.start or not (\
+                    e[1] == \"key\" or e[1] == \"char\" or e[1] == \"key_up\" or e[1] == \"paste\" or\
+                    e[1] == \"mouse_click\" or e[1] == \"mouse_up\" or e[1] == \"mouse_drag\" or \
+                    e[1] == \"mouse_scroll\" or e[1] == \"monitor_touch\")) then\
+                    local oldterm = term.current()\
+                    if v.term then term.redirect(v.term) end\
+                    local ok, filter = coroutine.resume(v.coro, table.unpack(e))\
+                    v.term = term.redirect(oldterm)\
+                    if coroutine.status(v.coro) == \"dead\" then\
+                        table.insert(delete, k)\
+                        completed_jobs[k] = {err = \"Done\", cmd = v.cmd, isfg = v.isfg}\
+                        os.queueEvent(\"job_complete\", k)\
+                    elseif not ok then\
+                        table.insert(delete, k)\
+                        completed_jobs[k] = {err = filter, cmd = v.cmd, isfg = v.isfg}\
+                        os.queueEvent(\"job_complete\", k)\
+                    end\
+                    v.filter = filter\
+                    v.start = false\
+                end\
+            end\
+            for k,v in ipairs(delete) do jobs[v] = nil end\
+        end\
+    end\
+end\
+\
+parallel.waitForAny(function()\
+    while running do \
+        for k,v in pairs(completed_jobs) do if not v.isfg then print(\"[\" .. k .. \"]+  \" .. v.err .. \"  \" .. v.cmd) end end\
+        completed_jobs = {}\
+        shell.runAsync(readCommand())\
+        while #jobs > 0 do\
+            local b = true\
+            for k,v in pairs(jobs) do if v.isfg and not v.paused then b = false; break end end\
+            if b then break end\
+            if os.pullEventRaw() == \"terminate\" then\
+                for k,v in pairs(jobs) do if v.isfg and not v.paused then\
+                    jobs[k] = nil\
+                    print(\"^T\")\
+                    b = true\
+                    break\
+                end end\
+            end\
+            if b then break end\
+        end\
+    end\
+end, function()\
+    local ctrlHeld = false\
+    while running do\
+        local ev = {os.pullEventRaw()}\
+        if ev[1] == \"key\" and (ev[2] == keys.leftCtrl or ev[2] == keys.rightCtrl) then ctrlHeld = true\
+        elseif ev[1] == \"key_up\" and (ev[2] == keys.leftCtrl or ev[2] == keys.rightCtrl) then ctrlHeld = false\
+        elseif ctrlHeld and ev[1] == \"key\" and ev[2] == keys.z then\
+            print(\"^Z\")\
+            for k,v in pairs(jobs) do if v.isfg and not v.paused then \
+                v.paused = true\
+                if CCKernel2 then kernel.signal(signal.SIGSTOP, v.pid) end\
+                pausedJob = k\
+                print(\"[\" .. k .. \"]+  Paused  \" .. v.cmd)\
+                os.queueEvent(\"job_paused\")\
+                break\
+            end end\
+        end\
+    end\
+end, jobManager)\
+\
+if execCommand then shell.run(execCommand); return vars[\"?\"] end\
+\
+historyfile.close()\
+return shell_retval",
+  [ "id.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local sDrive = nil\
+local tArgs = { ... }\
+if #tArgs > 0 then\
+    sDrive = tostring(tArgs[1])\
+end\
+\
+if sDrive == nil then\
+    print(\"This is computer #\" .. os.getComputerID())\
+\
+    local label = os.getComputerLabel()\
+    if label then\
+        print(\"This computer is labelled \\\"\" .. label .. \"\\\"\")\
+    end\
+\
+else\
+    if disk.hasAudio(sDrive) then\
+        local title = disk.getAudioTitle(sDrive)\
+        if title then\
+            print(\"Has audio track \\\"\" .. title .. \"\\\"\")\
+        else\
+            print(\"Has untitled audio\")\
+        end\
+        return\
+    end\
+\
+    if not disk.hasData(sDrive) then\
+        print(\"No disk in drive \" .. sDrive)\
+        return\
+    end\
+\
+    local id = disk.getID(sDrive)\
+    if id then\
+        print(\"The disk is #\" .. id)\
+    else\
+        print(\"Non-disk data source\")\
+    end\
+\
+    local label = disk.getLabel(sDrive)\
+    if label then\
+        print(\"Labelled \\\"\" .. label .. \"\\\"\")\
+    end\
+end\
+",
+  [ "peripherals.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tPeripherals = peripheral.getNames()\
+print(\"Attached Peripherals:\")\
+if #tPeripherals > 0 then\
+    for n = 1, #tPeripherals do\
+        local sPeripheral = tPeripherals[n]\
+        print(sPeripheral .. \" (\" .. table.concat({ peripheral.getType(sPeripheral) }, \", \") .. \")\")\
+    end\
+else\
+    print(\"None\")\
+end\
+",
+  [ "cd.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+if #tArgs < 1 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <path>\")\
+    return\
+end\
+\
+local sNewDir = shell.resolve(tArgs[1])\
+if fs.isDir(sNewDir) then\
+    shell.setDir(sNewDir)\
+else\
+    print(\"Not a directory\")\
+    return\
+end\
+",
+  [ "delete.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local args = table.pack(...)\
+\
+if args.n < 1 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <paths>\")\
+    return\
+end\
+\
+for i = 1, args.n do\
+    local files = fs.find(shell.resolve(args[i]))\
+    if #files > 0 then\
+        for _, file in ipairs(files) do\
+            if fs.isReadOnly(file) then\
+                printError(\"Cannot delete read-only file /\" .. file)\
+            elseif fs.isDriveRoot(file) then\
+                printError(\"Cannot delete mount /\" .. file)\
+                if fs.isDir(file) then\
+                    print(\"To delete its contents run rm /\" .. fs.combine(file, \"*\"))\
+                end\
+            else\
+                local ok, err = pcall(fs.delete, file)\
+                if not ok then\
+                    printError((err:gsub(\"^pcall: \", \"\")))\
+                end\
+            end\
+        end\
+    else\
+        printError(args[i] .. \": No matching files\")\
+    end\
+end\
+",
+  [ "drive.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+\
+-- Get where a directory is mounted\
+local sPath = shell.dir()\
+if tArgs[1] ~= nil then\
+    sPath = shell.resolve(tArgs[1])\
+end\
+\
+if fs.exists(sPath) then\
+    write(fs.getDrive(sPath) .. \" (\")\
+    local nSpace = fs.getFreeSpace(sPath)\
+    if nSpace >= 1000 * 1000 then\
+        print(math.floor(nSpace / (100 * 1000)) / 10 .. \"MB remaining)\")\
+    elseif nSpace >= 1000 then\
+        print(math.floor(nSpace / 100) / 10 .. \"KB remaining)\")\
+    else\
+        print(nSpace .. \"B remaining)\")\
+    end\
+else\
+    print(\"No such path\")\
+end\
+",
+  [ "label.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local function printUsage()\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usages:\")\
+    print(programName .. \" get\")\
+    print(programName .. \" get <drive>\")\
+    print(programName .. \" set <text>\")\
+    print(programName .. \" set <drive> <text>\")\
+    print(programName .. \" clear\")\
+    print(programName .. \" clear <drive>\")\
+end\
+\
+local function checkDrive(sDrive)\
+    if peripheral.getType(sDrive) == \"drive\" then\
+        -- Check the disk exists\
+        local bData = disk.hasData(sDrive)\
+        if not bData then\
+            print(\"No disk in \" .. sDrive .. \" drive\")\
+            return false\
+        end\
+    else\
+        print(\"No disk drive named \" .. sDrive)\
+        return false\
+    end\
+    return true\
+end\
+\
+local function get(sDrive)\
+    if sDrive ~= nil then\
+        if checkDrive(sDrive) then\
+            local sLabel = disk.getLabel(sDrive)\
+            if sLabel then\
+                print(\"Disk label is \\\"\" .. sLabel .. \"\\\"\")\
+            else\
+                print(\"No Disk label\")\
+            end\
+        end\
+    else\
+        local sLabel = os.getComputerLabel()\
+        if sLabel then\
+            print(\"Computer label is \\\"\" .. sLabel .. \"\\\"\")\
+        else\
+            print(\"No Computer label\")\
+        end\
+    end\
+end\
+\
+local function set(sDrive, sText)\
+    if sDrive ~= nil then\
+        if checkDrive(sDrive) then\
+            disk.setLabel(sDrive, sText)\
+            local sLabel = disk.getLabel(sDrive)\
+            if sLabel then\
+                print(\"Disk label set to \\\"\" .. sLabel .. \"\\\"\")\
+            else\
+                print(\"Disk label cleared\")\
+            end\
+        end\
+    else\
+        os.setComputerLabel(sText)\
+        local sLabel = os.getComputerLabel()\
+        if sLabel then\
+            print(\"Computer label set to \\\"\" .. sLabel .. \"\\\"\")\
+        else\
+            print(\"Computer label cleared\")\
+        end\
+    end\
+end\
+\
+local tArgs = { ... }\
+local sCommand = tArgs[1]\
+if sCommand == \"get\" then\
+    -- Get a label\
+    if #tArgs == 1 then\
+        get(nil)\
+    elseif #tArgs == 2 then\
+        get(tArgs[2])\
+    else\
+        printUsage()\
+    end\
+elseif sCommand == \"set\" then\
+    -- Set a label\
+    if #tArgs == 2 then\
+        set(nil, tArgs[2])\
+    elseif #tArgs == 3 then\
+        set(tArgs[2], tArgs[3])\
+    else\
+        printUsage()\
+    end\
+elseif sCommand == \"clear\" then\
+    -- Clear a label\
+    if #tArgs == 1 then\
+        set(nil, nil)\
+    elseif #tArgs == 2 then\
+        set(tArgs[2], nil)\
+    else\
+        printUsage()\
+    end\
+else\
+    printUsage()\
+end\
+",
+  [ "alias.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+if #tArgs > 2 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <alias> <program>\")\
+    return\
+end\
+\
+local sAlias = tArgs[1]\
+local sProgram = tArgs[2]\
+\
+if sAlias and sProgram then\
+    -- Set alias\
+    shell.setAlias(sAlias, sProgram)\
+elseif sAlias then\
+    -- Clear alias\
+    shell.clearAlias(sAlias)\
+else\
+    -- List aliases\
+    local tAliases = shell.aliases()\
+    local tList = {}\
+    for sAlias, sCommand in pairs(tAliases) do\
+        table.insert(tList, sAlias .. \":\" .. sCommand)\
+    end\
+    table.sort(tList)\
+    textutils.pagedTabulate(tList)\
+end\
+",
+  [ "autocomplete.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local completion = require \"cc.shell.completion\"\
+\
+-- Setup completion functions\
+\
+local function completePastebinPut(shell, text, previous)\
+    if previous[2] == \"put\" then\
+        return fs.complete(text, shell.dir(), true, false)\
+    end\
+end\
+\
+local function completeConfigPart2(shell, text, previous)\
+    if previous[2] == \"get\" or previous[2] == \"set\" then\
+        return completion.choice(shell, text, previous, config.list(), previous[2] == \"set\")\
+    end\
+end\
+\
+local function completeConfigPart3(shell, text, previous)\
+    if previous[2] == \"set\" then\
+        if config.getType(previous[3]) == \"boolean\" then return completion.choice(shell, text, previous, {\"true\", \"false\"})\
+        elseif previous[3] == \"mount_mode\" then return completion.choice(shell, text, previous, {\"none\", \"ro\", \"ro_strict\", \"rw\"}) end\
+    end\
+end\
+\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/alias.lua\", completion.build(nil, completion.program))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/cd.lua\", completion.build(completion.dir))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/clear.lua\", completion.build({ completion.choice, { \"screen\", \"palette\", \"all\" } }))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/copy.lua\", completion.build(\
+    { completion.dirOrFile, true },\
+    completion.dirOrFile\
+))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/delete.lua\", completion.build({ completion.dirOrFile, many = true }))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/drive.lua\", completion.build(completion.dir))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/edit.lua\", completion.build(completion.file))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/eject.lua\", completion.build(completion.peripheral))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/gps.lua\", completion.build({ completion.choice, { \"host\", \"host \", \"locate\" } }))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/help.lua\", completion.build(completion.help))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/id.lua\", completion.build(completion.peripheral))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/label.lua\", completion.build(\
+    { completion.choice, { \"get\", \"get \", \"set \", \"clear\", \"clear \" } },\
+    completion.peripheral\
+))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/list.lua\", completion.build(completion.dir))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/mkdir.lua\", completion.build({ completion.dir, many = true }))\
+\
+local complete_monitor_extra = { \"scale\" }\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/monitor.lua\", completion.build(\
+    function(shell, text, previous)\
+        local choices = completion.peripheral(shell, text, previous, true)\
+        for _, option in pairs(completion.choice(shell, text, previous, complete_monitor_extra, true)) do\
+            choices[#choices + 1] = option\
+        end\
+        return choices\
+    end,\
+    function(shell, text, previous)\
+        if previous[2] == \"scale\" then\
+            return completion.peripheral(shell, text, previous, true)\
+        else\
+            return completion.programWithArgs(shell, text, previous, 3)\
+        end\
+    end,\
+    {\
+        function(shell, text, previous)\
+            if previous[2] ~= \"scale\" then\
+                return completion.programWithArgs(shell, text, previous, 3)\
+            end\
+        end,\
+        many = true,\
+    }\
+))\
+\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/move.lua\", completion.build(\
+    { completion.dirOrFile, true },\
+    completion.dirOrFile\
+))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/redstone.lua\", completion.build(\
+    { completion.choice, { \"probe\", \"set \", \"pulse \" } },\
+    completion.side\
+))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/rename.lua\", completion.build(\
+    { completion.dirOrFile, true },\
+    completion.dirOrFile\
+))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/type.lua\", completion.build(completion.dirOrFile))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/set.lua\", completion.build({ completion.setting, true }))\
+\
+\
+-- Show MOTD\
+if settings.get(\"motd.enable\") then\
+    shell.run(\"motd\")\
+end\
+",
+  [ "move.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+if #tArgs < 2 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <source> <destination>\")\
+    return\
+end\
+\
+local sSource = shell.resolve(tArgs[1])\
+local sDest = shell.resolve(tArgs[2])\
+local tFiles = fs.find(sSource)\
+\
+local function sanity_checks(source, dest)\
+    if fs.exists(dest) then\
+        printError(\"Destination exists\")\
+        return false\
+    elseif fs.isReadOnly(dest) then\
+        printError(\"Destination is read-only\")\
+        return false\
+    elseif fs.isDriveRoot(source) then\
+        printError(\"Cannot move mount /\" .. source)\
+        return false\
+    elseif fs.isReadOnly(source) then\
+        printError(\"Cannot move read-only file /\" .. source)\
+        return false\
+    end\
+    return true\
+end\
+\
+if #tFiles > 0 then\
+    for _, sFile in ipairs(tFiles) do\
+        if fs.isDir(sDest) then\
+            local dest = fs.combine(sDest, fs.getName(sFile))\
+            if sanity_checks(sFile, dest) then\
+                fs.move(sFile, dest)\
+            end\
+        elseif #tFiles == 1 then\
+            if sanity_checks(sFile, sDest) then\
+                fs.move(sFile, sDest)\
+            end\
+        else\
+            printError(\"Cannot overwrite file multiple times\")\
+            return\
+        end\
+    end\
+else\
+    printError(\"No matching files\")\
+end\
+",
+  [ "multishell.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+--- Multishell allows multiple programs to be run at the same time.\
+--\
+-- When multiple programs are running, it displays a tab bar at the top of the\
+-- screen, which allows you to switch between programs. New programs can be\
+-- launched using the `fg` or `bg` programs, or using the @{shell.openTab} and\
+-- @{multishell.launch} functions.\
+--\
+-- Each process is identified by its ID, which corresponds to its position in\
+-- the tab list. As tabs may be opened and closed, this ID is _not_ constant\
+-- over a program's run. As such, be careful not to use stale IDs.\
+--\
+-- As with @{shell}, @{multishell} is not a \"true\" API. Instead, it is a\
+-- standard program, which launches a shell and injects its API into the shell's\
+-- environment. This API is not available in the global environment, and so is\
+-- not available to @{os.loadAPI|APIs}.\
+--\
+-- @module[module] multishell\
+-- @since 1.6\
+\
+local expect = dofile(\"rom/modules/main/cc/expect.lua\").expect\
+\
+-- Setup process switching\
+local parentTerm = term.current()\
+local w, h = parentTerm.getSize()\
+\
+local tProcesses = {}\
+local nCurrentProcess = nil\
+local nRunningProcess = nil\
+local bShowMenu = false\
+local bWindowsResized = false\
+local nScrollPos = 1\
+local bScrollRight = false\
+\
+local function selectProcess(n)\
+    if nCurrentProcess ~= n then\
+        if nCurrentProcess then\
+            local tOldProcess = tProcesses[nCurrentProcess]\
+            tOldProcess.window.setVisible(false)\
+        end\
+        nCurrentProcess = n\
+        if nCurrentProcess then\
+            local tNewProcess = tProcesses[nCurrentProcess]\
+            tNewProcess.window.setVisible(true)\
+            tNewProcess.bInteracted = true\
+        end\
+    end\
+end\
+\
+local function setProcessTitle(n, sTitle)\
+    tProcesses[n].sTitle = sTitle\
+end\
+\
+local function resumeProcess(nProcess, sEvent, ...)\
+    local tProcess = tProcesses[nProcess]\
+    local sFilter = tProcess.sFilter\
+    if sFilter == nil or sFilter == sEvent or sEvent == \"terminate\" then\
+        local nPreviousProcess = nRunningProcess\
+        nRunningProcess = nProcess\
+        term.redirect(tProcess.terminal)\
+        local ok, result = coroutine.resume(tProcess.co, sEvent, ...)\
+        tProcess.terminal = term.current()\
+        if ok then\
+            tProcess.sFilter = result\
+        else\
+            printError(result)\
+        end\
+        nRunningProcess = nPreviousProcess\
+    end\
+end\
+\
+local function launchProcess(bFocus, tProgramEnv, sProgramPath, ...)\
+    local tProgramArgs = table.pack(...)\
+    local nProcess = #tProcesses + 1\
+    local tProcess = {}\
+    tProcess.sTitle = fs.getName(sProgramPath)\
+    if bShowMenu then\
+        tProcess.window = window.create(parentTerm, 1, 2, w, h - 1, false)\
+    else\
+        tProcess.window = window.create(parentTerm, 1, 1, w, h, false)\
+    end\
+\
+    -- Restrict the public view of the window to normal redirect functions.\
+    tProcess.terminal = {}\
+    for k in pairs(term.native()) do tProcess.terminal[k] = tProcess.window[k] end\
+\
+    tProcess.co = coroutine.create(function()\
+        os.run(tProgramEnv, sProgramPath, table.unpack(tProgramArgs, 1, tProgramArgs.n))\
+        if not tProcess.bInteracted then\
+            term.setCursorBlink(false)\
+            print(\"Press any key to continue\")\
+            os.pullEvent(\"char\")\
+        end\
+    end)\
+    tProcess.sFilter = nil\
+    tProcess.bInteracted = false\
+    tProcesses[nProcess] = tProcess\
+    if bFocus then\
+        selectProcess(nProcess)\
+    end\
+    resumeProcess(nProcess)\
+    return nProcess\
+end\
+\
+local function cullProcess(nProcess)\
+    local tProcess = tProcesses[nProcess]\
+    if coroutine.status(tProcess.co) == \"dead\" then\
+        if nCurrentProcess == nProcess then\
+            selectProcess(nil)\
+        end\
+        table.remove(tProcesses, nProcess)\
+        if nCurrentProcess == nil then\
+            if nProcess > 1 then\
+                selectProcess(nProcess - 1)\
+            elseif #tProcesses > 0 then\
+                selectProcess(1)\
+            end\
+        end\
+        if nScrollPos ~= 1 then\
+            nScrollPos = nScrollPos - 1\
+        end\
+        return true\
+    end\
+    return false\
+end\
+\
+local function cullProcesses()\
+    local culled = false\
+    for n = #tProcesses, 1, -1 do\
+        culled = culled or cullProcess(n)\
+    end\
+    return culled\
+end\
+\
+-- Setup the main menu\
+local menuMainTextColor, menuMainBgColor, menuOtherTextColor, menuOtherBgColor\
+if parentTerm.isColor() then\
+    menuMainTextColor, menuMainBgColor = colors.blue, colors.gray\
+    menuOtherTextColor, menuOtherBgColor = colors.black, colors.lightGray\
+else\
+    menuMainTextColor, menuMainBgColor = colors.white, colors.gray\
+    menuOtherTextColor, menuOtherBgColor = colors.black, colors.lightGray\
+end\
+\
+local function redrawMenu()\
+    if bShowMenu then\
+        -- Draw menu\
+        parentTerm.setCursorPos(1, 1)\
+        parentTerm.setBackgroundColor(menuOtherBgColor)\
+        parentTerm.clearLine()\
+        local nCharCount = 0\
+        local nSize = parentTerm.getSize()\
+        if nScrollPos ~= 1 then\
+            parentTerm.setTextColor(menuOtherTextColor)\
+            parentTerm.setBackgroundColor(menuOtherBgColor)\
+            parentTerm.write(\"<\")\
+            nCharCount = 1\
+        end\
+        for n = nScrollPos, #tProcesses do  \
+            if n == nCurrentProcess then\
+                parentTerm.setTextColor(menuMainTextColor)\
+                parentTerm.setBackgroundColor(menuMainBgColor)\
+            else\
+                parentTerm.setTextColor(menuOtherTextColor)\
+                parentTerm.setBackgroundColor(menuOtherBgColor)\
+            end\
+            parentTerm.write(\" \" .. tProcesses[n].sTitle .. \" \")\
+            nCharCount = nCharCount + #tProcesses[n].sTitle + 2\
+        end\
+        if nCharCount > nSize then\
+            parentTerm.setTextColor(menuOtherTextColor)\
+            parentTerm.setBackgroundColor(menuOtherBgColor)\
+            parentTerm.setCursorPos(nSize, 1)\
+            parentTerm.write(\">\")\
+            bScrollRight = true\
+        else\
+            bScrollRight = false\
+        end\
+\
+        -- Put the cursor back where it should be\
+        local tProcess = tProcesses[nCurrentProcess]\
+        if tProcess then\
+            tProcess.window.restoreCursor()\
+        end\
+    end\
+end\
+\
+local function resizeWindows()\
+    local windowY, windowHeight\
+    if bShowMenu then\
+        windowY = 2\
+        windowHeight = h - 1\
+    else\
+        windowY = 1\
+        windowHeight = h\
+    end\
+    for n = 1, #tProcesses do\
+        local tProcess = tProcesses[n]\
+        local x, y = tProcess.window.getCursorPos()\
+        if y > windowHeight then\
+            tProcess.window.scroll(y - windowHeight)\
+            tProcess.window.setCursorPos(x, windowHeight)\
+        end\
+        tProcess.window.reposition(1, windowY, w, windowHeight)\
+    end\
+    bWindowsResized = true\
+end\
+\
+local function setMenuVisible(bVis)\
+    if bShowMenu ~= bVis then\
+        bShowMenu = bVis\
+        resizeWindows()\
+        redrawMenu()\
+    end\
+end\
+\
+local multishell = {} --- @export\
+\
+--- Get the currently visible process. This will be the one selected on\
+-- the tab bar.\
+--\
+-- Note, this is different to @{getCurrent}, which returns the process which is\
+-- currently executing.\
+--\
+-- @treturn number The currently visible process's index.\
+-- @see setFocus\
+function multishell.getFocus()\
+    return nCurrentProcess\
+end\
+\
+--- Change the currently visible process.\
+--\
+-- @tparam number n The process index to switch to.\
+-- @treturn boolean If the process was changed successfully. This will\
+-- return @{false} if there is no process with this id.\
+-- @see getFocus\
+function multishell.setFocus(n)\
+    expect(1, n, \"number\")\
+    if n >= 1 and n <= #tProcesses then\
+        selectProcess(n)\
+        redrawMenu()\
+        return true\
+    end\
+    return false\
+end\
+\
+--- Get the title of the given tab.\
+--\
+-- This starts as the name of the program, but may be changed using\
+-- @{multishell.setTitle}.\
+-- @tparam number n The process index.\
+-- @treturn string|nil The current process title, or @{nil} if the\
+-- process doesn't exist.\
+function multishell.getTitle(n)\
+    expect(1, n, \"number\")\
+    if n >= 1 and n <= #tProcesses then\
+        return tProcesses[n].sTitle\
+    end\
+    return nil\
+end\
+\
+--- Set the title of the given process.\
+--\
+-- @tparam number n The process index.\
+-- @tparam string title The new process title.\
+-- @see getTitle\
+-- @usage Change the title of the current process\
+--\
+--     multishell.setTitle(multishell.getCurrent(), \"Hello\")\
+function multishell.setTitle(n, title)\
+    expect(1, n, \"number\")\
+    expect(2, title, \"string\")\
+    if n >= 1 and n <= #tProcesses then\
+        setProcessTitle(n, title)\
+        redrawMenu()\
+    end\
+end\
+\
+--- Get the index of the currently running process.\
+--\
+-- @treturn number The currently running process.\
+function multishell.getCurrent()\
+    return nRunningProcess\
+end\
+\
+--- Start a new process, with the given environment, program and arguments.\
+--\
+-- The returned process index is not constant over the program's run. It can be\
+-- safely used immediately after launching (for instance, to update the title or\
+-- switch to that tab). However, after your program has yielded, it may no\
+-- longer be correct.\
+--\
+-- @tparam table tProgramEnv The environment to load the path under.\
+-- @tparam string sProgramPath The path to the program to run.\
+-- @param ... Additional arguments to pass to the program.\
+-- @treturn number The index of the created process.\
+-- @see os.run\
+-- @usage Run the \"hello\" program, and set its title to \"Hello!\"\
+--\
+--     local id = multishell.launch({}, \"/rom/programs/fun/hello.lua\")\
+--     multishell.setTitle(id, \"Hello!\")\
+function multishell.launch(tProgramEnv, sProgramPath, ...)\
+    expect(1, tProgramEnv, \"table\")\
+    expect(2, sProgramPath, \"string\")\
+    local previousTerm = term.current()\
+    setMenuVisible(true)\
+    local nResult = launchProcess(false, tProgramEnv, sProgramPath, ...)\
+    redrawMenu()\
+    term.redirect(previousTerm)\
+    return nResult\
+end\
+\
+--- Get the number of processes within this multishell.\
+--\
+-- @treturn number The number of processes.\
+function multishell.getCount()\
+    return #tProcesses\
+end\
+\
+-- Begin\
+parentTerm.clear()\
+setMenuVisible(true)\
+launchProcess(true, {\
+    [\"shell\"] = shell,\
+    [\"multishell\"] = multishell,\
+}, \"/modular/modules/shell/main.lua\", ...)\
+\
+-- Run processes\
+while #tProcesses > 0 do\
+    -- Get the event\
+    local tEventData = table.pack(os.pullEventRaw())\
+    local sEvent = tEventData[1]\
+    if sEvent == \"term_resize\" then\
+        -- Resize event\
+        w, h = parentTerm.getSize()\
+        resizeWindows()\
+        redrawMenu()\
+\
+    elseif sEvent == \"char\" or sEvent == \"key\" or sEvent == \"key_up\" or sEvent == \"paste\" or sEvent == \"terminate\" or sEvent == \"file_transfer\" then\
+        -- Basic input, just passthrough to current process\
+        resumeProcess(nCurrentProcess, table.unpack(tEventData, 1, tEventData.n))\
+        if cullProcess(nCurrentProcess) then\
+            setMenuVisible(true)\
+            redrawMenu()\
+        end\
+\
+    elseif sEvent == \"mouse_click\" then\
+        -- Click event\
+        local button, x, y = tEventData[2], tEventData[3], tEventData[4]\
+        if bShowMenu and y == 1 then\
+            -- Switch process\
+            if x == 1 and nScrollPos ~= 1 then\
+                nScrollPos = nScrollPos - 1\
+                redrawMenu()\
+            elseif bScrollRight and x == term.getSize() then\
+                nScrollPos = nScrollPos + 1\
+                redrawMenu()\
+            else\
+                local tabStart = 1\
+                if nScrollPos ~= 1 then\
+                    tabStart = 2\
+                end\
+                for n = nScrollPos, #tProcesses do\
+                    local tabEnd = tabStart + #tProcesses[n].sTitle + 1\
+                    if x >= tabStart and x <= tabEnd then\
+                        selectProcess(n)\
+                        redrawMenu()\
+                        break\
+                    end\
+                    tabStart = tabEnd + 1\
+                end\
+            end\
+        else\
+            -- Passthrough to current process\
+            resumeProcess(nCurrentProcess, sEvent, button, x, bShowMenu and y - 1 or y)\
+            if cullProcess(nCurrentProcess) then\
+                setMenuVisible(true)\
+                redrawMenu()\
+            end\
+        end\
+\
+    elseif sEvent == \"mouse_drag\" or sEvent == \"mouse_up\" or sEvent == \"mouse_scroll\" then\
+        -- Other mouse event\
+        local p1, x, y = tEventData[2], tEventData[3], tEventData[4]\
+        if bShowMenu and sEvent == \"mouse_scroll\" and y == 1 then\
+            if p1 == -1 and nScrollPos ~= 1 then\
+                nScrollPos = nScrollPos - 1\
+                redrawMenu()\
+            elseif bScrollRight and p1 == 1 then\
+                nScrollPos = nScrollPos + 1\
+                redrawMenu()\
+            end\
+        elseif not (bShowMenu and y == 1) then\
+            -- Passthrough to current process\
+            resumeProcess(nCurrentProcess, sEvent, p1, x, bShowMenu and y - 1 or y)\
+            if cullProcess(nCurrentProcess) then\
+                setMenuVisible(true)\
+                redrawMenu()\
+            end\
+        end\
+        \
+    elseif sEvent == \"_CCPC_mobile_keyboard_open\" and settings.get(\"shell.mobile_resize_with_keyboard\") then\
+        -- Resize event\
+        w, h = parentTerm.getSize(), tEventData[2]\
+        resizeWindows()\
+        redrawMenu()\
+    \
+    elseif sEvent == \"_CCPC_mobile_keyboard_close\" and settings.get(\"shell.mobile_resize_with_keyboard\") then\
+        -- Resize event\
+        w, h = parentTerm.getSize()\
+        resizeWindows()\
+        redrawMenu()\
+\
+    else\
+        -- Other event\
+        -- Passthrough to all processes\
+        local nLimit = #tProcesses -- Storing this ensures any new things spawned don't get the event\
+        for n = 1, nLimit do\
+            resumeProcess(n, table.unpack(tEventData, 1, tEventData.n))\
+        end\
+        if cullProcesses() then\
+            setMenuVisible(true)\
+            redrawMenu()\
+        end\
+    end\
+\
+    if bWindowsResized then\
+        -- Pass term_resize to all processes\
+        local nLimit = #tProcesses -- Storing this ensures any new things spawned don't get the event\
+        for n = 1, nLimit do\
+            resumeProcess(n, \"term_resize\")\
+        end\
+        bWindowsResized = false\
+        if cullProcesses() then\
+            setMenuVisible(true)\
+            redrawMenu()\
+        end\
+    end\
+end\
+\
+-- Shutdown\
+sleep(0.5)\
+os.shutdown()\
+",
+  [ "mkdir.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+\
+if #tArgs < 1 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <paths>\")\
+    return\
+end\
+\
+for _, v in ipairs(tArgs) do\
+    local sNewDir = shell.resolve(v)\
+    if fs.exists(sNewDir) and not fs.isDir(sNewDir) then\
+        printError(v .. \": Destination exists\")\
+    elseif fs.isReadOnly(sNewDir) then\
+        printError(v .. \": Access denied\")\
+    else\
+        fs.makeDir(sNewDir)\
+    end\
+end\
+",
+  [ "screenfetch.lua" ] = "-- SPDX-FileCopyrightText: 2019 JackMacWindows\
+--\
+-- SPDX-License-Identifier: MIT\
+\
+if os.pullEvent ~= nil then\
+\
+    local ccart, ccart_fg, ccart_bg, ccart_adv_fg, ccart_adv_bg, ccart_width\
+\
+    if ... == \"--small\" then\
+\
+        ccart = ([[\\159\\143\\143\\143\\143\\143\\143\\143\\144\
+\\150\\136\\144     \\150\
+\\150\\130 \\131    \\150\
+\\150       \\150\
+\\150       \\150\
+\\150      \\140\\150\
+         ]]):gsub(\"\\\\130\", \"\\130\"):gsub(\"\\\\131\", \"\\131\"):gsub(\"\\\\136\", \"\\136\"):gsub(\"\\\\140\", \"\\140\"):gsub(\"\\\\143\", \"\\143\"):gsub(\"\\\\144\", \"\\144\"):gsub(\"\\\\150\", \"\\149\"):gsub(\"\\\\159\", \"\\159\")\
+\
+        ccart_fg = [[ffffffff7\
+f00fffff7\
+f0f0ffff7\
+ffffffff8\
+ffffffff8\
+f888888f8\
+fffffffff]]\
+\
+        ccart_bg = [[77777777f\
+7ffffffff\
+7ffffffff\
+8ffffffff\
+8ffffffff\
+88888888f\
+fffffffff]]\
+\
+        ccart_adv_fg = [[ffffffffb\
+f00fffffb\
+f0f0ffffb\
+ffffffffb\
+ffffffffb\
+f444444db\
+fffffffff]]\
+\
+        ccart_adv_bg = [[bbbbbbbbf\
+bffffffff\
+bffffffff\
+bffffffff\
+bffffffff\
+bbbbbbbbf\
+fffffffff]]\
+\
+        ccart_width = 10\
+\
+    else\
+        ccart = [[------------------------\
+|                      |\
+| -------------------- |\
+| | \\                | |\
+| | / __             | |\
+| |                  | |\
+| |                  | |\
+| |                  | |\
+| |                  | |\
+| |                  | |\
+| |                  | |\
+| -------------------- |\
+|                      |\
+|                  [=] |\
+|                      |\
+------------------------]]\
+\
+        ccart_fg = [[ffffffffffffffffffffffff\
+f7777777777777777777777f\
+f7ffffffffffffffffffff7f\
+f7ff0fffffffffffffffff7f\
+f7ff0f00ffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8888888888888888888888f\
+f888888888888888888fff8f\
+f8888888888888888888888f\
+ffffffffffffffffffffffff]]\
+\
+        ccart_bg = [[ffffffffffffffffffffffff\
+f7777777777777777777777f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8888888888888888888888f\
+f888888888888888888fff8f\
+f8888888888888888888888f\
+ffffffffffffffffffffffff]]\
+\
+        ccart_adv_fg = [[ffffffffffffffffffffffff\
+f4444444444444444444444f\
+f4ffffffffffffffffffff4f\
+f4ff0fffffffffffffffff4f\
+f4ff0f00ffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4444444444444444444444f\
+f444444444444444444ddd4f\
+f4444444444444444444444f\
+ffffffffffffffffffffffff]]\
+\
+        ccart_adv_bg = [[ffffffffffffffffffffffff\
+fbbbbbbbbbbbbbbbbbbbbbbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbbbbbbbbbbbbbbbbbbbbbbf\
+fbbbbbbbbbbbbbbbbbbdddbf\
+fbbbbbbbbbbbbbbbbbbbbbbf\
+ffffffffffffffffffffffff]]\
+\
+        ccart_width = 25\
+\
+    end\
+\
+    local function fg(l) if term.isColor() then return string.rep(\"b\", l) else return string.rep(\"8\", l) end end\
+    local function text(title, str) return {title .. str, fg(string.len(title)) .. string.rep(\"0\", string.len(str)), string.rep(\"f\", string.len(title .. str))} end\
+\
+    local function time(n)\
+        local h = math.floor(n / 3600)\
+        local m = math.floor(n / 60) % 60\
+        local s = n % 60\
+        local retval = s .. \"s\"\
+        if m > 0 or h > 0 then retval = m .. \"m \" .. retval end\
+        if h > 0 then retval = h .. \"h \" .. retval end\
+        return retval\
+    end\
+\
+    local function ext(retval)\
+        if debug ~= nil then table.insert(retval, text(\"    \", \"Debug enabled\")) end\
+        if http ~= nil then table.insert(retval, text(\"    \", \"HTTP enabled\")) \
+        if http.websocket ~= nil then table.insert(retval, text(\"    \", \"CC: Tweaked\")) end end\
+        if mounter ~= nil then table.insert(retval, text(\"    \", \"CraftOS-PC\")) end\
+        if term.setGraphicsMode ~= nil then table.insert(retval, text(\"    \", \"CraftOS-PC GFX\")) end\
+        if term.screenshot ~= nil then table.insert(retval, text(\"    \", \"CraftOS-PC 2\")) end\
+        if ccemux ~= nil then table.insert(retval, text(\"    \", \"CCEmuX\")) end\
+        if fs.exists(\".mbs\") or fs.exists(\"rom/.mbs\") then table.insert(retval, text(\"    \", \"MBS\")) end\
+        if type(kernel) == \"table\" then table.insert(retval, text(\"    \", \"CCKernel2\")) end\
+        return retval\
+    end\
+\
+    local function getRuntime()\
+        if os.about ~= nil then return string.sub(os.about(), 1, string.find(os.about(), \"\\n\"))\
+        elseif ccemux ~= nil then return ccemux.getVersion()\
+        elseif _MC_VERSION ~= nil then return _MC_VERSION\
+        else return \"Unknown\" end\
+    end\
+\
+    local sysinfo = {\
+        text(os.getComputerLabel() or \"Untitled Computer\", \"\"),\
+        text(\"Type: \", commands ~= nil and \"Command Computer\" or term.isColor() and \"Advanced Computer\" or \"Standard Computer\"),\
+        text(\"OS: \", os.version()),\
+        text(\"Runtime: \", getRuntime()),\
+        text(\"Lua: \", _VERSION),\
+        text(\"Host: \", _HOST),\
+        text(\"Uptime: \", time(os.clock())),\
+        text(\"Extensions: \", \"\")\
+    }\
+    ext(sysinfo)\
+    local lines, sw, sh = 2, term.getSize()\
+    term.clear()\
+    term.setCursorPos(1, 2)\
+    for i = 1, string.len(ccart), ccart_width do \
+        term.blit(string.sub(ccart, i, i+ccart_width-2), string.sub(term.isColor() and ccart_adv_fg or ccart_fg, i, i+ccart_width-2), string.sub(term.isColor() and ccart_adv_bg or ccart_bg, i, i+ccart_width-2))\
+        write(\"  \")\
+        if sysinfo[((i-1)/ccart_width)+1] ~= nil then term.blit(table.unpack(sysinfo[((i-1)/ccart_width)+1])) end\
+        print(\"\")\
+        lines = lines + 1\
+    end\
+    for i = lines - 1, #sysinfo do\
+        write(string.rep(\" \", ccart_width + 1))\
+        term.blit(table.unpack(sysinfo[i]))\
+        print(\"\")\
+    end\
+    print(\"\")\
+    if term.screenshot ~= nil then term.screenshot() end\
+    sleep(0.25)\
+\
+else print(\"Unknown computer type\") end",
+  [ "useradd.lua" ] = "local tArgs = {...}\
+if module.config.users[module.currentUser][2] == 0 then\
+    write(\"password for \"..tArgs[1]..\": \")\
+    local pass = read(\"\")\
+    module.config.users[tArgs[1]] = {pass,1}\
+else\
+    print(\"useradd: must be ran as root\")\
+end",
+  [ "type.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+if #tArgs < 1 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <path>\")\
+    return\
+end\
+\
+local sPath = shell.resolve(tArgs[1])\
+if fs.exists(sPath) then\
+    if fs.isDir(sPath) then\
+        print(\"directory\")\
+    else\
+        print(\"file\")\
+    end\
+else\
+    print(\"No such path\")\
+end\
+",
+  [ "time.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local nTime = os.time()\
+local nDay = os.day()\
+print(\"The time is \" .. textutils.formatTime(nTime, false) .. \" on Day \" .. nDay)\
+",
+  [ "reboot.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+if term.isColour() then\
+    term.setTextColour(colours.blue)\
+end\
+print(\"Goodbye\")\
+term.setTextColour(colours.white)\
+\
+sleep(1)\
+os.reboot()\
+",
+  [ "shutdown.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+if term.isColour() then\
+    term.setTextColour(colours.blue)\
+end\
+print(\"Goodbye\")\
+term.setTextColour(colours.white)\
+\
+sleep(1)\
+os.shutdown()\
+",
+  [ "motd.lua" ] = "-- SPDX-FileCopyrightText: 2020 The CC: Tweaked Developers\
+--\
+-- SPDX-License-Identifier: MPL-2.0\
+\
+if _CCPC_FIRST_RUN then\
+    print([[Welcome to CraftOS-PC! This is the ComputerCraft shell prompt, where you can run programs.\
+* Type \"programs\" to see the programs you can run.\
+* Type \"help <program>\" to see help for a specific program.\
+* Read the documentation at https://www.craftos-pc.cc/docs/.\
+* Report bugs to https://www.craftos-pc.cc/bugreport.\
+]])\
+elseif _CCPC_UPDATED_VERSION then\
+    print(\"CraftOS-PC has been updated to \" .. _HOST:match(\"CraftOS%-PC [%a]* ?(v[%d%.]+)\") .. \". To see the new changes, type \\\"help whatsnew\\\".\")\
+else\
+    local date = os.date(\"*t\")\
+    if date.year == 2021 then\
+        print(\"Thank you SquidDev!\")\
+    elseif date.month == 1 and date.day == 1 then\
+        print(\"Happy new year!\")\
+    elseif date.month == 12 and date.day == 24 then\
+        print(\"Merry X-mas!\")\
+    elseif date.month == 10 and date.day == 31 then\
+        print(\"OOoooOOOoooo! Spooky!\")\
+    elseif date.month == 4 and date.day == 28 then\
+        print(\"Ed Balls\")\
+    elseif date.month == 9 and date.day == 8 then\
+        print(\"Happy birthday, CraftOS-PC!\")\
+    else\
+        local tMotd = {}\
+\
+        for sPath in string.gmatch(settings.get(\"motd.path\"), \"[^:]+\") do\
+            if fs.exists(sPath) then\
+                for sLine in io.lines(sPath) do\
+                    table.insert(tMotd, sLine)\
+                end\
+            end\
+        end\
+\
+        if mobile and mobile.purchasePlugin then\
+            table.insert(tMotd, \"Want to add more features to CraftOS-PC? Buy additional plugins using the plugins command.\")\
+        end\
+\
+        if #tMotd == 0 then\
+            print(\"missingno\")\
+        else\
+            print(tMotd[math.random(1, #tMotd)])\
+        end\
+    end\
+end\
+",
+  [ "set.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local pp = require \"cc.pretty\"\
+\
+local tArgs = { ... }\
+if #tArgs == 0 then\
+    -- \"set\"\
+    local _, y = term.getCursorPos()\
+    local tSettings = {}\
+    for n, sName in ipairs(settings.getNames()) do\
+        tSettings[n] = textutils.serialize(sName) .. \" is \" .. textutils.serialize(settings.get(sName))\
+    end\
+    textutils.pagedPrint(table.concat(tSettings, \"\\n\"), y - 3)\
+\
+elseif #tArgs == 1 then\
+    -- \"set foo\"\
+    local sName = tArgs[1]\
+    local deets = settings.getDetails(sName)\
+    local msg = pp.text(sName, colors.cyan) .. \" is \" .. pp.pretty(deets.value)\
+    if deets.default ~= nil and deets.value ~= deets.default then\
+        msg = msg .. \" (default is \" .. pp.pretty(deets.default) .. \")\"\
+    end\
+    pp.print(msg)\
+    if deets.description then print(deets.description) end\
+\
+else\
+    -- \"set foo bar\"\
+    local sName = tArgs[1]\
+    local sValue = tArgs[2]\
+    local value\
+    if sValue == \"true\" then\
+        value = true\
+    elseif sValue == \"false\" then\
+        value = false\
+    elseif sValue == \"nil\" then\
+        value = nil\
+    elseif tonumber(sValue) then\
+        value = tonumber(sValue)\
+    else\
+        value = sValue\
+    end\
+\
+    local option = settings.getDetails(sName)\
+    if value == nil then\
+        settings.unset(sName)\
+        print(textutils.serialize(sName) .. \" unset\")\
+    elseif option.type and option.type ~= type(value) then\
+        printError((\"%s is not a valid %s.\"):format(textutils.serialize(sValue), option.type))\
+    else\
+        settings.set(sName, value)\
+        print(textutils.serialize(sName) .. \" set to \" .. textutils.serialize(value))\
+    end\
+\
+    if value ~= option.value then\
+        settings.save()\
+    end\
+end\
+",
+  [ "list.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+\
+-- Get all the files in the directory\
+local sDir = shell.dir()\
+if tArgs[1] ~= nil then\
+    sDir = shell.resolve(tArgs[1])\
+end\
+\
+if not fs.isDir(sDir) then\
+    printError(\"Not a directory\")\
+    return\
+end\
+\
+-- Sort into dirs/files, and calculate column count\
+local tAll = fs.list(sDir)\
+local tFiles = {}\
+local tDirs = {}\
+\
+local bShowHidden = settings.get(\"list.show_hidden\")\
+for _, sItem in pairs(tAll) do\
+    if bShowHidden or string.sub(sItem, 1, 1) ~= \".\" then\
+        local sPath = fs.combine(sDir, sItem)\
+        if fs.isDir(sPath) then\
+            table.insert(tDirs, sItem)\
+        else\
+            table.insert(tFiles, sItem)\
+        end\
+    end\
+end\
+table.sort(tDirs)\
+table.sort(tFiles)\
+\
+if term.isColour() then\
+    textutils.pagedTabulate(colors.green, tDirs, colors.white, tFiles)\
+else\
+    textutils.pagedTabulate(colors.lightGray, tDirs, colors.white, tFiles)\
+end\
+",
+  [ "lua.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+if #tArgs > 0 then\
+    print(\"This is an interactive Lua prompt.\")\
+    print(\"To run a lua program, just type its name.\")\
+    return\
+end\
+\
+local pretty = require and require \"cc.pretty\" or dofile \"/rom/modules/main/cc/expect.lua\"\
+local exception = require and require \"cc.internal.exception\" or dofile \"/rom/modules/main/cc/internal/exception.lua\"\
+\
+local running = true\
+local tCommandHistory = {}\
+local tEnv = {\
+    [\"exit\"] = setmetatable({}, {\
+        __tostring = function() return \"Call exit() to exit.\" end,\
+        __call = function() running = false end,\
+    }),\
+    [\"_echo\"] = function(...)\
+        return ...\
+    end,\
+}\
+setmetatable(tEnv, { __index = _ENV })\
+\
+-- Replace our require with new instance that loads from the current directory\
+-- rather than from /rom/programs. This makes it more friendly to use and closer\
+-- to what you'd expect.\
+if shell then\
+    local make_package = require \"cc.require\".make\
+    local dir = shell.dir()\
+    _ENV.require, _ENV.package = make_package(_ENV, dir)\
+end\
+\
+if term.isColour() then\
+    term.setTextColour(colours.blue)\
+end\
+print(_G._CCPC_DEBUGGER_ACTIVE and \"Entering debugger.\" or \"Interactive Lua prompt.\")\
+print(\"Call exit() to exit.\")\
+term.setTextColour(colours.white)\
+\
+local chunk_idx, chunk_map = 1, {}\
+while running do\
+    --if term.isColour() then\
+    --    term.setTextColour( colours.yellow )\
+    --end\
+    write(_G._CCPC_DEBUGGER_ACTIVE and \"lua_debug> \" or \"lua> \")\
+    --term.setTextColour( colours.white )\
+\
+    local input = read(nil, tCommandHistory, function(sLine)\
+        if settings.get(\"lua.autocomplete\") then\
+            local nStartPos = string.find(sLine, \"[a-zA-Z0-9_%.:]+$\")\
+            if nStartPos then\
+                sLine = string.sub(sLine, nStartPos)\
+            end\
+            if #sLine > 0 then\
+                return textutils.complete(sLine, tEnv)\
+            end\
+        end\
+        return nil\
+    end)\
+    if input:match(\"%S\") and tCommandHistory[#tCommandHistory] ~= input then\
+        table.insert(tCommandHistory, input)\
+    end\
+    if settings.get(\"lua.warn_against_use_of_local\") and input:match(\"^%s*local%s+\") then\
+        if term.isColour() then\
+            term.setTextColour(colours.yellow)\
+        end\
+       print(\"To access local variables in later inputs, remove the local keyword.\")\
+       term.setTextColour(colours.white)\
+    end\
+\
+    local name, offset = \"=lua[\" .. chunk_idx .. \"]\", 0\
+\
+    local func, err = load(input, name, \"t\", tEnv)\
+    if load(\"return \" .. input) then\
+        -- We wrap the expression with a call to _echo(...), which prevents tail\
+        -- calls (and thus confusing errors). Note we check this is a valid\
+        -- expression separately, to avoid accepting inputs like `)--` (which are\
+        -- parsed as `_echo()--)`.\
+        func = load(\"return _echo(\" .. input .. \"\\n)\", name, \"t\", tEnv)\
+        offset = 13\
+    end\
+\
+    if func then\
+        chunk_map[name] = { contents = input, offset = offset }\
+        chunk_idx = chunk_idx + 1\
+\
+        local results = table.pack(exception.try(func))\
+        if results[1] then\
+            for i = 2, results.n do\
+                local value = results[i]\
+                local ok, serialised = pcall(pretty.pretty, value, {\
+                    function_args = settings.get(\"lua.function_args\"),\
+                    function_source = settings.get(\"lua.function_source\"),\
+                })\
+                if ok then\
+                    pretty.print(serialised)\
+                else\
+                    print(tostring(value))\
+                end\
+            end\
+        else\
+            printError(results[2])\
+            require \"cc.internal.exception\".report(results[2], results[3], chunk_map)\
+        end\
+    else\
+        local parser = require \"cc.internal.syntax\"\
+        if parser.parse_repl(input) then printError(err) end\
+    end\
+\
+end\
+",
+  [ "fg.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+if not shell.openTab then\
+    printError(\"Requires multishell\")\
+    return\
+end\
+\
+local tArgs = { ... }\
+if #tArgs > 0 then\
+    local nTask = shell.openTab(table.unpack(tArgs))\
+    if nTask then\
+        shell.switchTab(nTask)\
+    end\
+else\
+    local nTask = shell.openTab(\"shell\")\
+    if nTask then\
+        shell.switchTab(nTask)\
+    end\
+end\
+",
+  [ "rename.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+if #tArgs < 2 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <source> <destination>\")\
+    return\
+end\
+\
+local sSource = shell.resolve(tArgs[1])\
+local sDest = shell.resolve(tArgs[2])\
+\
+if not fs.exists(sSource) then\
+    printError(\"No matching files\")\
+    return\
+elseif fs.isDriveRoot(sSource) then\
+    printError(\"Can't rename mounts\")\
+    return\
+elseif fs.isReadOnly(sSource) then\
+    printError(\"Source is read-only\")\
+    return\
+elseif fs.exists(sDest) then\
+    printError(\"Destination exists\")\
+    return\
+elseif fs.isReadOnly(sDest) then\
+    printError(\"Destination is read-only\")\
+    return\
+end\
+\
+fs.move(sSource, sDest)\
+",
+  [ "redstone.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+\
+local function printUsage()\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usages:\")\
+    print(programName .. \" probe\")\
+    print(programName .. \" set <side> <value>\")\
+    print(programName .. \" set <side> <color> <value>\")\
+    print(programName .. \" pulse <side> <count> <period>\")\
+end\
+\
+local sCommand = tArgs[1]\
+if sCommand == \"probe\" then\
+    -- \"redstone probe\"\
+    -- Regular input\
+    print(\"Redstone inputs: \")\
+\
+    local count = 0\
+    local bundledCount = 0\
+    for _, sSide in ipairs(redstone.getSides()) do\
+        if redstone.getBundledInput(sSide) > 0 then\
+            bundledCount = bundledCount + 1\
+        end\
+        if redstone.getInput(sSide) then\
+            if count > 0 then\
+                io.write(\", \")\
+            end\
+            io.write(sSide)\
+            count = count + 1\
+        end\
+    end\
+    if count > 0 then\
+        print(\".\")\
+    else\
+        print(\"None.\")\
+    end\
+\
+    -- Bundled input\
+    if bundledCount > 0 then\
+        print()\
+        print(\"Bundled inputs:\")\
+        for _, sSide in ipairs(redstone.getSides()) do\
+            local nInput = redstone.getBundledInput(sSide)\
+            if nInput ~= 0 then\
+                write(sSide .. \": \")\
+                local count = 0\
+                for sColour, nColour in pairs(colors) do\
+                    if type(nColour) == \"number\" and colors.test(nInput, nColour) then\
+                        if count > 0 then\
+                            write(\", \")\
+                        end\
+                        if term.isColour() then\
+                            term.setTextColour(nColour)\
+                        end\
+                        write(sColour)\
+                        if term.isColour() then\
+                            term.setTextColour(colours.white)\
+                        end\
+                        count = count + 1\
+                    end\
+                end\
+                print(\".\")\
+            end\
+        end\
+    end\
+\
+elseif sCommand == \"pulse\" then\
+    -- \"redstone pulse\"\
+    local sSide = tArgs[2]\
+    local nCount = tonumber(tArgs[3]) or 1\
+    local nPeriod = tonumber(tArgs[4]) or 0.5\
+    for _ = 1, nCount do\
+        redstone.setOutput(sSide, true)\
+        sleep(nPeriod / 2)\
+        redstone.setOutput(sSide, false)\
+        sleep(nPeriod / 2)\
+    end\
+\
+elseif sCommand == \"set\" then\
+    -- \"redstone set\"\
+    local sSide = tArgs[2]\
+    if #tArgs > 3 then\
+        -- Bundled cable output\
+        local sColour = tArgs[3]\
+        local nColour = colors[sColour] or colours[sColour]\
+        if type(nColour) ~= \"number\" then\
+            printError(\"No such color\")\
+            return\
+        end\
+\
+        local sValue = tArgs[4]\
+        if sValue == \"true\" then\
+            rs.setBundledOutput(sSide, colors.combine(rs.getBundledOutput(sSide), nColour))\
+        elseif sValue == \"false\" then\
+            rs.setBundledOutput(sSide, colors.subtract(rs.getBundledOutput(sSide), nColour))\
+        else\
+            print(\"Value must be boolean\")\
+        end\
+    else\
+        -- Regular output\
+        local sValue = tArgs[3]\
+        local nValue = tonumber(sValue)\
+        if sValue == \"true\" then\
+            rs.setOutput(sSide, true)\
+        elseif sValue == \"false\" then\
+            rs.setOutput(sSide, false)\
+        elseif nValue and nValue >= 0 and nValue <= 15 then\
+            rs.setAnalogOutput(sSide, nValue)\
+        else\
+            print(\"Value must be boolean or 0-15\")\
+        end\
+    end\
+\
+else\
+    -- Something else\
+    printUsage()\
+\
+end\
+",
+  [ "copy.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+if #tArgs < 2 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <source> <destination>\")\
+    return\
+end\
+\
+local sSource = shell.resolve(tArgs[1])\
+local sDest = shell.resolve(tArgs[2])\
+local tFiles = fs.find(sSource)\
+if #tFiles > 0 then\
+    for _, sFile in ipairs(tFiles) do\
+        if fs.isDir(sDest) then\
+            fs.copy(sFile, fs.combine(sDest, fs.getName(sFile)))\
+        elseif #tFiles == 1 then\
+            if fs.exists(sDest) then\
+                 printError(\"Destination exists\")\
+            elseif fs.isReadOnly(sDest) then\
+                printError(\"Destination is read-only\")\
+            elseif fs.getFreeSpace(sDest) < fs.getSize(sFile) then\
+                printError(\"Not enough space\")\
+            else\
+                 fs.copy(sFile, sDest)\
+            end\
+        else\
+            printError(\"Cannot overwrite file multiple times\")\
+            return\
+        end\
+    end\
+else\
+    printError(\"No matching files\")\
+end\
+",
+  [ "programs.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local bAll = false\
+local tArgs = { ... }\
+if #tArgs > 0 and tArgs[1] == \"all\" then\
+    bAll = true\
+end\
+\
+local tPrograms = shell.programs(bAll)\
+textutils.pagedTabulate(tPrograms)\
+",
+  [ "about.lua" ] = "-- SPDX-FileCopyrightText: 2021 The CC: Tweaked Developers\
+--\
+-- SPDX-License-Identifier: MPL-2.0\
+\
+-- Prints information about CraftOS\
+term.setTextColor(colors.yellow)\
+print(os.version() .. \" on \" .. _HOST)\
+term.setTextColor(colors.white)",
+  [ "gps.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local function printUsage()\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usages:\")\
+    print(programName .. \" host\")\
+    print(programName .. \" host <x> <y> <z>\")\
+    print(programName .. \" locate\")\
+end\
+\
+local tArgs = { ... }\
+if #tArgs < 1 then\
+    printUsage()\
+    return\
+end\
+\
+ local sCommand = tArgs[1]\
+if sCommand == \"locate\" then\
+    -- \"gps locate\"\
+    -- Just locate this computer (this will print the results)\
+    gps.locate(2, true)\
+\
+elseif sCommand == \"host\" then\
+    -- \"gps host\"\
+    -- Act as a GPS host\
+    if pocket then\
+        print(\"GPS Hosts must be stationary\")\
+        return\
+    end\
+\
+    -- Find a modem\
+    local sModemSide = nil\
+    for _, sSide in ipairs(rs.getSides()) do\
+        if peripheral.getType(sSide) == \"modem\" and peripheral.call(sSide, \"isWireless\") then\
+            sModemSide = sSide\
+            break\
+        end\
+    end\
+\
+    if sModemSide == nil then\
+        print(\"No wireless modems found. 1 required.\")\
+        return\
+    end\
+\
+    -- Determine position\
+    local x, y, z\
+    if #tArgs >= 4 then\
+        -- Position is manually specified\
+        x = tonumber(tArgs[2])\
+        y = tonumber(tArgs[3])\
+        z = tonumber(tArgs[4])\
+        if x == nil or y == nil or z == nil then\
+            printUsage()\
+            return\
+        end\
+        print(\"Position is \" .. x .. \",\" .. y .. \",\" .. z)\
+    else\
+        -- Position is to be determined using locate\
+        x, y, z = gps.locate(2, true)\
+        if x == nil then\
+            print(\"Run \\\"gps host <x> <y> <z>\\\" to set position manually\")\
+            return\
+        end\
+    end\
+\
+    -- Open a channel\
+    local modem = peripheral.wrap(sModemSide)\
+    print(\"Opening channel on modem \" .. sModemSide)\
+    modem.open(gps.CHANNEL_GPS)\
+\
+    -- Serve requests indefinately\
+    local nServed = 0\
+    while true do\
+        local e, p1, p2, p3, p4, p5 = os.pullEvent(\"modem_message\")\
+        if e == \"modem_message\" then\
+            -- We received a message from a modem\
+            local sSide, sChannel, sReplyChannel, sMessage, nDistance = p1, p2, p3, p4, p5\
+            if sSide == sModemSide and sChannel == gps.CHANNEL_GPS and sMessage == \"PING\" and nDistance then\
+                -- We received a ping message on the GPS channel, send a response\
+                modem.transmit(sReplyChannel, gps.CHANNEL_GPS, { x, y, z })\
+\
+                -- Print the number of requests handled\
+                nServed = nServed + 1\
+                if nServed > 1 then\
+                    local _, y = term.getCursorPos()\
+                    term.setCursorPos(1, y - 1)\
+                end\
+                print(nServed .. \" GPS requests served\")\
+            end\
+        end\
+    end\
+else\
+    -- \"gps somethingelse\"\
+    -- Error\
+    printUsage()\
+end\
+",
+  [ "eject.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+-- Get arguments\
+local tArgs = { ... }\
+if #tArgs == 0 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <drive>\")\
+    return\
+end\
+\
+local sDrive = tArgs[1]\
+\
+-- Check the disk exists\
+local bPresent = disk.isPresent(sDrive)\
+if not bPresent then\
+    print(\"Nothing in \" .. sDrive .. \" drive\")\
+    return\
+end\
+\
+disk.eject(sDrive)\
+",
+  [ "clear.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+\
+local function printUsage()\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usages:\")\
+    print(programName)\
+    print(programName .. \" screen\")\
+    print(programName .. \" palette\")\
+    print(programName .. \" all\")\
+end\
+\
+local function clear()\
+    term.clear()\
+    term.setCursorPos(1, 1)\
+end\
+\
+local function clearPixels()\
+    if term.getGraphicsMode then\
+        term.setGraphicsMode(1)\
+        term.clear()\
+        term.setGraphicsMode(0)\
+    end\
+end\
+\
+local function resetPalette()\
+    for i = 0, 15 do\
+        term.setPaletteColour(2^i, term.nativePaletteColour(2^i))\
+    end\
+end\
+\
+local sCommand = tArgs[1] or \"screen\"\
+if sCommand == \"screen\" then\
+    clear()\
+elseif sCommand == \"palette\" then\
+    resetPalette()\
+elseif sCommand == \"graphics\" then\
+    clearPixels()\
+elseif sCommand == \"all\" then\
+    clear()\
+    clearPixels()\
+    resetPalette()\
+else\
+    printUsage()\
+end\
+",
+  [ "edit.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+-- Get file to edit\
+local tArgs = { ... }\
+if #tArgs == 0 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <path>\")\
+    return\
+end\
+\
+-- Error checking\
+local sPath = shell.resolve(tArgs[1])\
+local bReadOnly = fs.isReadOnly(sPath)\
+if fs.exists(sPath) and fs.isDir(sPath) then\
+    print(\"Cannot edit a directory.\")\
+    return\
+end\
+\
+-- Create .lua files by default\
+if not fs.exists(sPath) and not string.find(sPath, \"%.\") then\
+    local sExtension = settings.get(\"edit.default_extension\")\
+    if sExtension ~= \"\" and type(sExtension) == \"string\" then\
+        sPath = sPath .. \".\" .. sExtension\
+    end\
+end\
+\
+local x, y = 1, 1\
+local w, h = term.getSize()\
+local scrollX, scrollY = 0, 0\
+\
+local tLines = {}\
+local bRunning = true\
+\
+-- Colours\
+local highlightColour, keywordColour, commentColour, textColour, bgColour, stringColour, errorColour\
+if term.isColour() then\
+    bgColour = colours.black\
+    textColour = colours.white\
+    highlightColour = colours.blue\
+    keywordColour = colours.blue\
+    commentColour = colours.green\
+    stringColour = colours.red\
+    errorColour = colours.red\
+else\
+    bgColour = colours.black\
+    textColour = colours.white\
+    highlightColour = colours.white\
+    keywordColour = colours.white\
+    commentColour = colours.white\
+    stringColour = colours.white\
+    errorColour = colours.white\
+end\
+\
+local runHandler = [[multishell.setTitle(multishell.getCurrent(), %q)\
+local current = term.current()\
+local contents, name = %q, %q\
+local fn, err = load(contents, name, nil, _ENV)\
+if fn then\
+    local exception = require \"cc.internal.exception\"\
+    local ok, err, co = exception.try(fn, ...)\
+\
+    term.redirect(current)\
+    term.setTextColor(term.isColour() and colours.yellow or colours.white)\
+    term.setBackgroundColor(colours.black)\
+    term.setCursorBlink(false)\
+\
+    if not ok then\
+        printError(err)\
+        exception.report(err, co, { [name] = contents })\
+    end\
+else\
+    local parser = require \"cc.internal.syntax\"\
+    if parser.parse_program(contents) then printError(err) end\
+end\
+\
+local message = \"Press any key to continue.\"\
+if ok then message = \"Program finished. \" .. message end\
+local _, y = term.getCursorPos()\
+local w, h = term.getSize()\
+local wrapped = require(\"cc.strings\").wrap(message, w)\
+\
+local start_y = h - #wrapped + 1\
+if y >= start_y then term.scroll(y - start_y + 1) end\
+for i = 1, #wrapped do\
+    term.setCursorPos(1, start_y + i - 1)\
+    term.write(wrapped[i])\
+end\
+os.pullEvent('key')\
+require \"cc.internal.event\".discard_char()\
+]]\
+\
+-- Menus\
+local bMenu = false\
+local nMenuItem = 1\
+local tMenuItems = {}\
+if not bReadOnly then\
+    table.insert(tMenuItems, \"Save\")\
+end\
+if shell.openTab then\
+    table.insert(tMenuItems, \"Run\")\
+end\
+if peripheral.find(\"printer\") then\
+    table.insert(tMenuItems, \"Print\")\
+end\
+table.insert(tMenuItems, \"Exit\")\
+\
+local status_ok, status_text\
+local function set_status(text, ok)\
+    status_ok = ok ~= false\
+    status_text = text\
+end\
+\
+if not bReadOnly and fs.getFreeSpace(sPath) < 1024 then\
+    set_status(\"Disk is low on space\", false)\
+else\
+    local message\
+    if term.isColour() then\
+        message = \"Press Ctrl or click here to access menu\"\
+    else\
+        message = \"Press Ctrl to access menu\"\
+    end\
+\
+    if #message > w - 5 then\
+        message = \"Press Ctrl for menu\"\
+    end\
+\
+    set_status(message)\
+end\
+\
+local function load(_sPath)\
+    tLines = {}\
+    if fs.exists(_sPath) then\
+        local file = io.open(_sPath, \"r\")\
+        local sLine = file:read()\
+        while sLine do\
+            table.insert(tLines, sLine)\
+            sLine = file:read()\
+        end\
+        file:close()\
+    end\
+\
+    if #tLines == 0 then\
+        table.insert(tLines, \"\")\
+    end\
+end\
+\
+local function save(_sPath, fWrite)\
+    -- Create intervening folder\
+    local sDir = _sPath:sub(1, _sPath:len() - fs.getName(_sPath):len())\
+    if not fs.exists(sDir) then\
+        fs.makeDir(sDir)\
+    end\
+\
+    -- Save\
+    local file, fileerr\
+    local function innerSave()\
+        file, fileerr = fs.open(_sPath, \"w\")\
+        if file then\
+            if file then\
+                fWrite(file)\
+            end\
+        else\
+            error(\"Failed to open \" .. _sPath)\
+        end\
+    end\
+\
+    local ok, err = pcall(innerSave)\
+    if file then\
+        file.close()\
+    end\
+    return ok, err, fileerr\
+end\
+\
+local tKeywords = {\
+    [\"and\"] = true,\
+    [\"break\"] = true,\
+    [\"do\"] = true,\
+    [\"else\"] = true,\
+    [\"elseif\"] = true,\
+    [\"end\"] = true,\
+    [\"false\"] = true,\
+    [\"for\"] = true,\
+    [\"function\"] = true,\
+    [\"if\"] = true,\
+    [\"in\"] = true,\
+    [\"local\"] = true,\
+    [\"nil\"] = true,\
+    [\"not\"] = true,\
+    [\"or\"] = true,\
+    [\"repeat\"] = true,\
+    [\"return\"] = true,\
+    [\"then\"] = true,\
+    [\"true\"] = true,\
+    [\"until\"] = true,\
+    [\"while\"] = true,\
+}\
+\
+local function tryWrite(sLine, regex, colour)\
+    local match = string.match(sLine, regex)\
+    if match then\
+        if type(colour) == \"number\" then\
+            term.setTextColour(colour)\
+        else\
+            term.setTextColour(colour(match))\
+        end\
+        term.write(match)\
+        term.setTextColour(textColour)\
+        return string.sub(sLine, #match + 1)\
+    end\
+    return nil\
+end\
+\
+local function writeHighlighted(sLine)\
+    while #sLine > 0 do\
+        sLine =\
+            tryWrite(sLine, \"^%-%-%[%[.-%]%]\", commentColour) or\
+            tryWrite(sLine, \"^%-%-.*\", commentColour) or\
+            tryWrite(sLine, \"^\\\"\\\"\", stringColour) or\
+            tryWrite(sLine, \"^\\\".-[^\\\\]\\\"\", stringColour) or\
+            tryWrite(sLine, \"^\\'\\'\", stringColour) or\
+            tryWrite(sLine, \"^\\'.-[^\\\\]\\'\", stringColour) or\
+            tryWrite(sLine, \"^%[%[.-%]%]\", stringColour) or\
+            tryWrite(sLine, \"^[%w_]+\", function(match)\
+                if tKeywords[match] then\
+                    return keywordColour\
+                end\
+                return textColour\
+            end) or\
+            tryWrite(sLine, \"^[^%w_]\", textColour)\
+    end\
+end\
+\
+local tCompletions\
+local nCompletion\
+\
+local tCompleteEnv = _ENV\
+local function complete(sLine)\
+    if settings.get(\"edit.autocomplete\") then\
+        local nStartPos = string.find(sLine, \"[a-zA-Z0-9_%.:]+$\")\
+        if nStartPos then\
+            sLine = string.sub(sLine, nStartPos)\
+        end\
+        if #sLine > 0 then\
+            return textutils.complete(sLine, tCompleteEnv)\
+        end\
+    end\
+    return nil\
+end\
+\
+local function recomplete()\
+    local sLine = tLines[y]\
+    if not bMenu and not bReadOnly and x == #sLine + 1 then\
+        tCompletions = complete(sLine)\
+        if tCompletions and #tCompletions > 0 then\
+            nCompletion = 1\
+        else\
+            nCompletion = nil\
+        end\
+    else\
+        tCompletions = nil\
+        nCompletion = nil\
+    end\
+end\
+\
+local function writeCompletion(sLine)\
+    if nCompletion then\
+        local sCompletion = tCompletions[nCompletion]\
+        term.setTextColor(colours.white)\
+        term.setBackgroundColor(colours.grey)\
+        term.write(sCompletion)\
+        term.setTextColor(textColour)\
+        term.setBackgroundColor(bgColour)\
+    end\
+end\
+\
+local function redrawText()\
+    local cursorX, cursorY = x, y\
+    for y = 1, h - 1 do\
+        term.setCursorPos(1 - scrollX, y)\
+        term.clearLine()\
+\
+        local sLine = tLines[y + scrollY]\
+        if sLine ~= nil then\
+            writeHighlighted(sLine)\
+            if cursorY == y and cursorX == #sLine + 1 then\
+                writeCompletion()\
+            end\
+        end\
+    end\
+    term.setCursorPos(x - scrollX, y - scrollY)\
+end\
+\
+local function redrawLine(_nY)\
+    local sLine = tLines[_nY]\
+    if sLine then\
+        term.setCursorPos(1 - scrollX, _nY - scrollY)\
+        term.clearLine()\
+        writeHighlighted(sLine)\
+        if _nY == y and x == #sLine + 1 then\
+            writeCompletion()\
+        end\
+        term.setCursorPos(x - scrollX, _nY - scrollY)\
+    end\
+end\
+\
+local function redrawMenu()\
+    -- Clear line\
+    term.setCursorPos(1, h)\
+    term.clearLine()\
+\
+    -- Draw line numbers\
+    term.setCursorPos(w - #(\"Ln \" .. y) + 1, h)\
+    term.setTextColour(highlightColour)\
+    term.write(\"Ln \")\
+    term.setTextColour(textColour)\
+    term.write(y)\
+\
+    term.setCursorPos(1, h)\
+    if bMenu then\
+        -- Draw menu\
+        term.setTextColour(textColour)\
+        for nItem, sItem in pairs(tMenuItems) do\
+            if nItem == nMenuItem then\
+                term.setTextColour(highlightColour)\
+                term.write(\"[\")\
+                term.setTextColour(textColour)\
+                term.write(sItem)\
+                term.setTextColour(highlightColour)\
+                term.write(\"]\")\
+                term.setTextColour(textColour)\
+            else\
+                term.write(\" \" .. sItem .. \" \")\
+            end\
+        end\
+    else\
+        -- Draw status\
+        term.setTextColour(status_ok and highlightColour or errorColour)\
+        term.write(status_text)\
+        term.setTextColour(textColour)\
+    end\
+\
+    -- Reset cursor\
+    term.setCursorPos(x - scrollX, y - scrollY)\
+end\
+\
+local tMenuFuncs = {\
+    Save = function()\
+        if bReadOnly then\
+            set_status(\"Access denied\", false)\
+        else\
+            local ok, _, fileerr  = save(sPath, function(file)\
+                for _, sLine in ipairs(tLines) do\
+                    file.write(sLine .. \"\\n\")\
+                end\
+            end)\
+            if ok then\
+                set_status(\"Saved to \" .. sPath)\
+            else\
+                if fileerr then\
+                    set_status(\"Error saving: \" .. fileerr, false)\
+                else\
+                    set_status(\"Error saving to \" .. sPath, false)\
+                end\
+            end\
+        end\
+        redrawMenu()\
+    end,\
+    Print = function()\
+        local printer = peripheral.find(\"printer\")\
+        if not printer then\
+            set_status(\"No printer attached\", false)\
+            return\
+        end\
+\
+        local nPage = 0\
+        local sName = fs.getName(sPath)\
+        if printer.getInkLevel() < 1 then\
+            set_status(\"Printer out of ink\", false)\
+            return\
+        elseif printer.getPaperLevel() < 1 then\
+            set_status(\"Printer out of paper\", false)\
+            return\
+        end\
+\
+        local screenTerminal = term.current()\
+        local printerTerminal = {\
+            getCursorPos = printer.getCursorPos,\
+            setCursorPos = printer.setCursorPos,\
+            getSize = printer.getPageSize,\
+            write = printer.write,\
+        }\
+        printerTerminal.scroll = function()\
+            if nPage == 1 then\
+                printer.setPageTitle(sName .. \" (page \" .. nPage .. \")\")\
+            end\
+\
+            while not printer.newPage() do\
+                if printer.getInkLevel() < 1 then\
+                    set_status(\"Printer out of ink, please refill\", false)\
+                elseif printer.getPaperLevel() < 1 then\
+                    set_status(\"Printer out of paper, please refill\", false)\
+                else\
+                    set_status(\"Printer output tray full, please empty\", false)\
+                end\
+\
+                term.redirect(screenTerminal)\
+                redrawMenu()\
+                term.redirect(printerTerminal)\
+\
+                sleep(0.5)\
+            end\
+\
+            nPage = nPage + 1\
+            if nPage == 1 then\
+                printer.setPageTitle(sName)\
+            else\
+                printer.setPageTitle(sName .. \" (page \" .. nPage .. \")\")\
+            end\
+        end\
+\
+        bMenu = false\
+        term.redirect(printerTerminal)\
+        local ok, error = pcall(function()\
+            term.scroll()\
+            for _, sLine in ipairs(tLines) do\
+                print(sLine)\
+            end\
+        end)\
+        term.redirect(screenTerminal)\
+        if not ok then\
+            print(error)\
+        end\
+\
+        while not printer.endPage() do\
+            set_status(\"Printer output tray full, please empty\")\
+            redrawMenu()\
+            sleep(0.5)\
+        end\
+        bMenu = true\
+\
+        if nPage > 1 then\
+            set_status(\"Printed \" .. nPage .. \" Pages\")\
+        else\
+            set_status(\"Printed 1 Page\")\
+        end\
+        redrawMenu()\
+    end,\
+    Exit = function()\
+        bRunning = false\
+    end,\
+    Run = function()\
+        local sTitle = fs.getName(sPath)\
+        if sTitle:sub(-4) == \".lua\" then\
+            sTitle = sTitle:sub(1, -5)\
+        end\
+        local sTempPath = bReadOnly and \".temp.\" .. sTitle or fs.combine(fs.getDir(sPath), \".temp.\" .. sTitle)\
+        if fs.exists(sTempPath) then\
+            set_status(\"Error saving to \" .. sTempPath, false)\
+            return\
+        end\
+        local ok = save(sTempPath, function(file)\
+            file.write(runHandler:format(sTitle, table.concat(tLines, \"\\n\"), \"@/\" .. sPath))\
+        end)\
+        if ok then\
+            local nTask = shell.openTab(\"/\" .. sTempPath)\
+            if nTask then\
+                shell.switchTab(nTask)\
+            else\
+                set_status(\"Error starting Task\", false)\
+            end\
+            fs.delete(sTempPath)\
+        else\
+            set_status(\"Error saving to \" .. sTempPath, false)\
+        end\
+        redrawMenu()\
+    end,\
+}\
+\
+local function doMenuItem(_n)\
+    tMenuFuncs[tMenuItems[_n]]()\
+    if bMenu then\
+        bMenu = false\
+        term.setCursorBlink(true)\
+    end\
+    redrawMenu()\
+end\
+\
+local function setCursor(newX, newY)\
+    local _, oldY = x, y\
+    x, y = newX, newY\
+    local screenX = x - scrollX\
+    local screenY = y - scrollY\
+\
+    local bRedraw = false\
+    if screenX < 1 then\
+        scrollX = x - 1\
+        screenX = 1\
+        bRedraw = true\
+    elseif screenX > w then\
+        scrollX = x - w\
+        screenX = w\
+        bRedraw = true\
+    end\
+\
+    if screenY < 1 then\
+        scrollY = y - 1\
+        screenY = 1\
+        bRedraw = true\
+    elseif screenY > h - 1 then\
+        scrollY = y - (h - 1)\
+        screenY = h - 1\
+        bRedraw = true\
+    end\
+\
+    recomplete()\
+    if bRedraw then\
+        redrawText()\
+    elseif y ~= oldY then\
+        redrawLine(oldY)\
+        redrawLine(y)\
+    else\
+        redrawLine(y)\
+    end\
+    term.setCursorPos(screenX, screenY)\
+\
+    redrawMenu()\
+end\
+\
+-- Actual program functionality begins\
+load(sPath)\
+\
+term.setBackgroundColour(bgColour)\
+term.clear()\
+term.setCursorPos(x, y)\
+term.setCursorBlink(true)\
+\
+recomplete()\
+redrawText()\
+redrawMenu()\
+\
+local function acceptCompletion()\
+    if nCompletion then\
+        -- Append the completion\
+        local sCompletion = tCompletions[nCompletion]\
+        tLines[y] = tLines[y] .. sCompletion\
+        setCursor(x + #sCompletion , y)\
+    end\
+end\
+\
+-- Handle input\
+while bRunning do\
+    local sEvent, param, param2, param3 = os.pullEvent()\
+    if sEvent == \"key\" then\
+        if param == keys.up then\
+            -- Up\
+            if not bMenu then\
+                if nCompletion then\
+                    -- Cycle completions\
+                    nCompletion = nCompletion - 1\
+                    if nCompletion < 1 then\
+                        nCompletion = #tCompletions\
+                    end\
+                    redrawLine(y)\
+\
+                elseif y > 1 then\
+                    -- Move cursor up\
+                    setCursor(\
+                        math.min(x, #tLines[y - 1] + 1),\
+                        y - 1\
+                    )\
+                end\
+            end\
+\
+        elseif param == keys.down then\
+            -- Down\
+            if not bMenu then\
+                -- Move cursor down\
+                if nCompletion then\
+                    -- Cycle completions\
+                    nCompletion = nCompletion + 1\
+                    if nCompletion > #tCompletions then\
+                        nCompletion = 1\
+                    end\
+                    redrawLine(y)\
+\
+                elseif y < #tLines then\
+                    -- Move cursor down\
+                    setCursor(\
+                        math.min(x, #tLines[y + 1] + 1),\
+                        y + 1\
+                    )\
+                end\
+            end\
+\
+        elseif param == keys.tab then\
+            -- Tab\
+            if not bMenu and not bReadOnly then\
+                if nCompletion and x == #tLines[y] + 1 then\
+                    -- Accept autocomplete\
+                    acceptCompletion()\
+                else\
+                    -- Indent line\
+                    local sLine = tLines[y]\
+                    tLines[y] = string.sub(sLine, 1, x - 1) .. \"    \" .. string.sub(sLine, x)\
+                    setCursor(x + 4, y)\
+                end\
+            end\
+\
+        elseif param == keys.pageUp then\
+            -- Page Up\
+            if not bMenu then\
+                -- Move up a page\
+                local newY\
+                if y - (h - 1) >= 1 then\
+                    newY = y - (h - 1)\
+                else\
+                    newY = 1\
+                end\
+                setCursor(\
+                    math.min(x, #tLines[newY] + 1),\
+                    newY\
+                )\
+            end\
+\
+        elseif param == keys.pageDown then\
+            -- Page Down\
+            if not bMenu then\
+                -- Move down a page\
+                local newY\
+                if y + (h - 1) <= #tLines then\
+                    newY = y + (h - 1)\
+                else\
+                    newY = #tLines\
+                end\
+                local newX = math.min(x, #tLines[newY] + 1)\
+                setCursor(newX, newY)\
+            end\
+\
+        elseif param == keys.home then\
+            -- Home\
+            if not bMenu then\
+                -- Move cursor to the beginning\
+                if x > 1 then\
+                    setCursor(1, y)\
+                end\
+            end\
+\
+        elseif param == keys[\"end\"] then\
+            -- End\
+            if not bMenu then\
+                -- Move cursor to the end\
+                local nLimit = #tLines[y] + 1\
+                if x < nLimit then\
+                    setCursor(nLimit, y)\
+                end\
+            end\
+\
+        elseif param == keys.left then\
+            -- Left\
+            if not bMenu then\
+                if x > 1 then\
+                    -- Move cursor left\
+                    setCursor(x - 1, y)\
+                elseif x == 1 and y > 1 then\
+                    setCursor(#tLines[y - 1] + 1, y - 1)\
+                end\
+            else\
+                -- Move menu left\
+                nMenuItem = nMenuItem - 1\
+                if nMenuItem < 1 then\
+                    nMenuItem = #tMenuItems\
+                end\
+                redrawMenu()\
+            end\
+\
+        elseif param == keys.right then\
+            -- Right\
+            if not bMenu then\
+                local nLimit = #tLines[y] + 1\
+                if x < nLimit then\
+                    -- Move cursor right\
+                    setCursor(x + 1, y)\
+                elseif nCompletion and x == #tLines[y] + 1 then\
+                    -- Accept autocomplete\
+                    acceptCompletion()\
+                elseif x == nLimit and y < #tLines then\
+                    -- Go to next line\
+                    setCursor(1, y + 1)\
+                end\
+            else\
+                -- Move menu right\
+                nMenuItem = nMenuItem + 1\
+                if nMenuItem > #tMenuItems then\
+                    nMenuItem = 1\
+                end\
+                redrawMenu()\
+            end\
+\
+        elseif param == keys.delete then\
+            -- Delete\
+            if not bMenu and not bReadOnly then\
+                local nLimit = #tLines[y] + 1\
+                if x < nLimit then\
+                    local sLine = tLines[y]\
+                    tLines[y] = string.sub(sLine, 1, x - 1) .. string.sub(sLine, x + 1)\
+                    recomplete()\
+                    redrawLine(y)\
+                elseif y < #tLines then\
+                    tLines[y] = tLines[y] .. tLines[y + 1]\
+                    table.remove(tLines, y + 1)\
+                    recomplete()\
+                    redrawText()\
+                end\
+            end\
+\
+        elseif param == keys.backspace then\
+            -- Backspace\
+            if not bMenu and not bReadOnly then\
+                if x > 1 then\
+                    -- Remove character\
+                    local sLine = tLines[y]\
+                    if x > 4 and string.sub(sLine, x - 4, x - 1) == \"    \" and not string.sub(sLine, 1, x - 1):find(\"%S\") then\
+                        tLines[y] = string.sub(sLine, 1, x - 5) .. string.sub(sLine, x)\
+                        setCursor(x - 4, y)\
+                    else\
+                        tLines[y] = string.sub(sLine, 1, x - 2) .. string.sub(sLine, x)\
+                        setCursor(x - 1, y)\
+                    end\
+                elseif y > 1 then\
+                    -- Remove newline\
+                    local sPrevLen = #tLines[y - 1]\
+                    tLines[y - 1] = tLines[y - 1] .. tLines[y]\
+                    table.remove(tLines, y)\
+                    setCursor(sPrevLen + 1, y - 1)\
+                    redrawText()\
+                end\
+            end\
+\
+        elseif param == keys.enter or param == keys.numPadEnter then\
+            -- Enter/Numpad Enter\
+            if not bMenu and not bReadOnly then\
+                -- Newline\
+                local sLine = tLines[y]\
+                local _, spaces = string.find(sLine, \"^[ ]+\")\
+                if not spaces then\
+                    spaces = 0\
+                end\
+                tLines[y] = string.sub(sLine, 1, x - 1)\
+                table.insert(tLines, y + 1, string.rep(' ', spaces) .. string.sub(sLine, x))\
+                setCursor(spaces + 1, y + 1)\
+                redrawText()\
+\
+            elseif bMenu then\
+                -- Menu selection\
+                doMenuItem(nMenuItem)\
+\
+            end\
+\
+        elseif param == keys.leftCtrl or param == keys.rightCtrl then\
+            -- Menu toggle\
+            bMenu = not bMenu\
+            if bMenu then\
+                term.setCursorBlink(false)\
+            else\
+                term.setCursorBlink(true)\
+            end\
+            redrawMenu()\
+        elseif param == keys.rightAlt then\
+            if bMenu then\
+                bMenu = false\
+                term.setCursorBlink(true)\
+                redrawMenu()\
+            end\
+        end\
+\
+    elseif sEvent == \"char\" then\
+        if not bMenu and not bReadOnly then\
+            -- Input text\
+            local sLine = tLines[y]\
+            tLines[y] = string.sub(sLine, 1, x - 1) .. param .. string.sub(sLine, x)\
+            setCursor(x + 1, y)\
+\
+        elseif bMenu then\
+            -- Select menu items\
+            for n, sMenuItem in ipairs(tMenuItems) do\
+                if string.lower(string.sub(sMenuItem, 1, 1)) == string.lower(param) then\
+                    doMenuItem(n)\
+                    break\
+                end\
+            end\
+        end\
+\
+    elseif sEvent == \"paste\" then\
+        if not bReadOnly then\
+            -- Close menu if open\
+            if bMenu then\
+                bMenu = false\
+                term.setCursorBlink(true)\
+                redrawMenu()\
+            end\
+            -- Input text\
+            local sLine = tLines[y]\
+            tLines[y] = string.sub(sLine, 1, x - 1) .. param .. string.sub(sLine, x)\
+            setCursor(x + #param , y)\
+        end\
+\
+    elseif sEvent == \"mouse_click\" then\
+        local cx, cy = param2, param3\
+        if not bMenu then\
+            if param == 1 then\
+                -- Left click\
+                if cy < h then\
+                    local newY = math.min(math.max(scrollY + cy, 1), #tLines)\
+                    local newX = math.min(math.max(scrollX + cx, 1), #tLines[newY] + 1)\
+                    setCursor(newX, newY)\
+                else\
+                    bMenu = true\
+                    redrawMenu()\
+                end\
+            end\
+        else\
+            if cy == h then\
+                local nMenuPosEnd = 1\
+                local nMenuPosStart = 1\
+                for n, sMenuItem in ipairs(tMenuItems) do\
+                    nMenuPosEnd = nMenuPosEnd + #sMenuItem + 1\
+                    if cx > nMenuPosStart and cx < nMenuPosEnd then\
+                        doMenuItem(n)\
+                    end\
+                    nMenuPosEnd = nMenuPosEnd + 1\
+                    nMenuPosStart = nMenuPosEnd\
+                end\
+            else\
+                bMenu = false\
+                term.setCursorBlink(true)\
+                redrawMenu()\
+            end\
+        end\
+\
+    elseif sEvent == \"mouse_scroll\" then\
+        if not bMenu then\
+            if param == -1 then\
+                -- Scroll up\
+                if scrollY > 0 then\
+                    -- Move cursor up\
+                    scrollY = scrollY - 1\
+                    redrawText()\
+                end\
+\
+            elseif param == 1 then\
+                -- Scroll down\
+                local nMaxScroll = #tLines - (h - 1)\
+                if scrollY < nMaxScroll then\
+                    -- Move cursor down\
+                    scrollY = scrollY + 1\
+                    redrawText()\
+                end\
+\
+            end\
+        end\
+\
+    elseif sEvent == \"term_resize\" then\
+        w, h = term.getSize()\
+        setCursor(x, y)\
+        redrawMenu()\
+        redrawText()\
+\
+    end\
+end\
+\
+-- Cleanup\
+term.clear()\
+term.setCursorBlink(false)\
+term.setCursorPos(1, 1)\
+",
+  [ "help.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+local sTopic\
+if #tArgs > 0 then\
+    sTopic = tArgs[1]\
+else\
+    sTopic = \"intro\"\
+end\
+\
+if sTopic == \"index\" then\
+    print(\"Help topics available:\")\
+    local tTopics = help.topics()\
+    textutils.pagedTabulate(tTopics)\
+    return\
+end\
+\
+local strings = require \"cc.strings\"\
+\
+local function min_of(a, b, default)\
+    if not a and not b then return default end\
+    if not a then return b end\
+    if not b then return a end\
+    return math.min(a, b)\
+end\
+\
+--[[- Parse a markdown string, extracting headings and highlighting some basic\
+constructs.\
+The implementation of this is horrible. SquidDev shouldn't be allowed to write\
+parsers, especially ones they think might be \"performance critical\".\
+]]\
+local function parse_markdown(text)\
+    local len = #text\
+    local oob = len + 1\
+\
+    -- Some patterns to match headers and bullets on the start of lines.\
+    -- The `%f[^\\n\\0]` is some wonderful logic to match the start of a line /or/\
+    -- the start of the document.\
+    local heading = \"%f[^\\n%z](#+ +)([^\\n]*)\"\
+    local bullet = \"%f[^\\n%z]( *)[.*]( +)\"\
+    local code = \"`([^`]+)`\"\
+\
+    local new_text, fg, bg = \"\", \"\", \"\"\
+    local function append(txt, fore, back)\
+        new_text = new_text .. txt\
+        fg = fg .. (fore or \"0\"):rep(#txt)\
+        bg = bg .. (back or \"f\"):rep(#txt)\
+    end\
+\
+    local next_header = text:find(heading)\
+    local next_bullet = text:find(bullet)\
+    local next_block = min_of(next_header, next_bullet, oob)\
+\
+    local next_code, next_code_end = text:find(code)\
+\
+    local sections = {}\
+\
+    local start = 1\
+    while start <= len do\
+        if start == next_block then\
+            if start == next_header then\
+                local _, fin, head, content = text:find(heading, start)\
+                sections[#new_text + 1] = content\
+                append(head .. content, \"4\", \"f\")\
+                start = fin + 1\
+\
+                next_header = text:find(heading, start)\
+            else\
+                local _, fin, space, content = text:find(bullet, start)\
+                append(space .. \"\\7\" .. content)\
+                start = fin + 1\
+\
+                next_bullet = text:find(bullet, start)\
+            end\
+\
+            next_block = min_of(next_header, next_bullet, oob)\
+        elseif next_code and next_code_end < next_block then\
+            -- Basic inline code blocks\
+            if start < next_code then append(text:sub(start, next_code - 1)) end\
+            local content = text:match(code, next_code)\
+            append(content, \"0\", \"7\")\
+\
+            start = next_code_end + 1\
+            next_code, next_code_end = text:find(code, start)\
+        else\
+            -- Normal text\
+            append(text:sub(start, next_block - 1))\
+            start = next_block\
+\
+            -- Rescan for a new code block\
+            if next_code then next_code, next_code_end = text:find(code, start) end\
+        end\
+    end\
+\
+    return new_text, fg, bg, sections\
+end\
+\
+local function word_wrap_basic(text, width)\
+    local lines, fg, bg = strings.wrap(text, width), {}, {}\
+    local fg_line, bg_line = (\"0\"):rep(width), (\"f\"):rep(width)\
+\
+    -- Normalise the strings suitable for use with blit. We could skip this and\
+    -- just use term.write, but saves us a clearLine call.\
+    for k, line in pairs(lines) do\
+        lines[k] = strings.ensure_width(line, width)\
+        fg[k] = fg_line\
+        bg[k] = bg_line\
+    end\
+\
+    return lines, fg, bg, {}\
+end\
+\
+local function word_wrap_markdown(text, width)\
+    -- Add in styling for Markdown-formatted text.\
+    local text, fg, bg, sections = parse_markdown(text)\
+\
+    local lines = strings.wrap(text, width)\
+    local fglines, bglines, section_list, section_n = {}, {}, {}, 1\
+\
+    -- Normalise the strings suitable for use with blit. We could skip this and\
+    -- just use term.write, but saves us a clearLine call.\
+    local start = 1\
+    for k, line in pairs(lines) do\
+        -- I hate this with a burning passion, but it works!\
+        local pos = text:find(line, start, true)\
+        lines[k], fglines[k], bglines[k] =\
+            strings.ensure_width(line, width),\
+            strings.ensure_width(fg:sub(pos, pos + #line), width),\
+            strings.ensure_width(bg:sub(pos, pos + #line), width)\
+\
+        if sections[pos] then\
+            section_list[section_n], section_n = { content = sections[pos], offset = k - 1 }, section_n + 1\
+        end\
+\
+        start = pos + 1\
+    end\
+\
+    return lines, fglines, bglines, section_list\
+end\
+\
+local sFile = help.lookup(sTopic)\
+local file = sFile ~= nil and io.open(sFile) or nil\
+if not file then\
+    printError(\"No help available\")\
+    return\
+end\
+\
+local contents = file:read(\"*a\")\
+file:close()\
+-- Trim trailing newlines from the file to avoid displaying a blank line.\
+if contents:sub(-1) == \"\\n\" then contents:sub(1, -2) end\
+\
+local word_wrap = sFile:sub(-3) == \".md\" and word_wrap_markdown or word_wrap_basic\
+local width, height = term.getSize()\
+local content_height = height - 1 -- Height of the content box.\
+local lines, fg, bg, sections = word_wrap(contents, width)\
+local print_height = #lines\
+\
+-- If we fit within the screen, just display without pagination.\
+if print_height <= content_height then\
+    local _, y = term.getCursorPos()\
+    for i = 1, print_height do\
+        if y + i - 1 > height then\
+            term.scroll(1)\
+            term.setCursorPos(1, height)\
+        else\
+            term.setCursorPos(1, y + i - 1)\
+        end\
+\
+        term.blit(lines[i], fg[i], bg[i])\
+    end\
+    return\
+end\
+\
+local current_section = nil\
+local offset = 0\
+\
+--- Find the currently visible section, or nil if this document has no sections.\
+--\
+-- This could potentially be a binary search, but right now it's not worth it.\
+local function find_section()\
+    for i = #sections, 1, -1 do\
+        if sections[i].offset <= offset then\
+            return i\
+        end\
+    end\
+end\
+\
+local function draw_menu()\
+    term.setTextColor(colors.yellow)\
+    term.setCursorPos(1, height)\
+    term.clearLine()\
+\
+    local tag = \"Help: \" .. sTopic\
+    if current_section then\
+        tag = tag .. (\" (%s)\"):format(sections[current_section].content)\
+    end\
+    term.write(tag)\
+\
+    if width >= #tag + 16 then\
+        term.setCursorPos(width - 14, height)\
+        term.write(\"Press Q to exit\")\
+    end\
+end\
+\
+\
+local function draw()\
+    for y = 1, content_height do\
+        term.setCursorPos(1, y)\
+        if y + offset > print_height then\
+            -- Should only happen if we resize the terminal to a larger one\
+            -- than actually needed for the current text.\
+            term.clearLine()\
+        else\
+            term.blit(lines[y + offset], fg[y + offset], bg[y + offset])\
+        end\
+    end\
+\
+    local new_section = find_section()\
+    if new_section ~= current_section then\
+        current_section = new_section\
+        draw_menu()\
+    end\
+end\
+\
+draw()\
+draw_menu()\
+\
+while true do\
+    local event, param = os.pullEventRaw()\
+    if event == \"key\" then\
+        if param == keys.up and offset > 0 then\
+            offset = offset - 1\
+            draw()\
+        elseif param == keys.down and offset < print_height - content_height then\
+            offset = offset + 1\
+            draw()\
+        elseif param == keys.pageUp and offset > 0 then\
+            offset = math.max(offset - content_height + 1, 0)\
+            draw()\
+        elseif param == keys.pageDown and offset < print_height - content_height then\
+            offset = math.min(offset + content_height - 1, print_height - content_height)\
+            draw()\
+        elseif param == keys.home then\
+            offset = 0\
+            draw()\
+        elseif param == keys.left and current_section and current_section > 1 then\
+            offset = sections[current_section - 1].offset\
+            draw()\
+        elseif param == keys.right and current_section and current_section < #sections then\
+            offset = sections[current_section + 1].offset\
+            draw()\
+        elseif param == keys[\"end\"] then\
+            offset = print_height - content_height\
+            draw()\
+        elseif param == keys.q then\
+            require \"cc.internal.event\".discard_char()\
+            break\
+        end\
+    elseif event == \"mouse_scroll\" then\
+        if param < 0 and offset > 0 then\
+            offset = offset - 1\
+            draw()\
+        elseif param > 0 and offset <= print_height - content_height then\
+            offset = offset + 1\
+            draw()\
+        end\
+    elseif event == \"term_resize\" then\
+        local new_width, new_height = term.getSize()\
+\
+        if new_width ~= width then\
+            lines, fg, bg = word_wrap(contents, new_width)\
+            print_height = #lines\
+        end\
+\
+        width, height = new_width, new_height\
+        content_height = height - 1\
+        offset = math.max(math.min(offset, print_height - content_height), 0)\
+        draw()\
+        draw_menu()\
+    elseif event == \"terminate\" then\
+        break\
+    end\
+end\
+\
+term.setCursorPos(1, 1)\
+term.clear()\
+",
+}
