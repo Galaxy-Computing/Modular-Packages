@@ -52,6 +52,7 @@ if #tArgs == 1 then
             term.redirect(win)
             shell.run("wget "..repository..name..".mpk /modular/.setup/"..name..".mpk")
             shell.run("/modular/modules/modctl/main.lua i ".."/modular/.setup/"..name..".mpk y") -- no modular shell yet, so run using the direct path
+            term.redirect(term.native())
         end
         -- now we have all software, time to put the normal config and kernel meta back
         fs.delete("/modular/config")
