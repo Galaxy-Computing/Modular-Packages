@@ -47,7 +47,7 @@ if #tArgs == 1 then
     if tArgs[1] == "postreboot" then -- we're after the reboot
         screen("   The installer is now installing software.","")
         for i,name in ipairs(installpackages) do
-            screen("   The installer is now installing software.","Installing "..name.."... ("..i.."/"..#packages..")")
+            screen("   The installer is now installing software.","Installing "..name.."... ("..i.."/"..#installpackages..")")
             local win = window.create(term.current(),1,1,1,1,false)
             term.redirect(win)
             shell.run("wget "..repository..name..".mpk /modular/.setup/"..name..".mpk")
@@ -67,7 +67,7 @@ if #tArgs == 1 then
         sleep(1)
         screen("   The system will now reboot.","Rebooting in 1...")
         sleep(1)
-        os.reboot()
+        os.forcereboot()
         return
     end
 end
