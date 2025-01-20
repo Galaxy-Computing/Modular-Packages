@@ -39,7 +39,7 @@ function waitForEnter()
     local continue = false
     while not continue do
         local _,keycode,_ = os.pullEvent("key")
-        if keycode == 28 then continue = true end
+        if keycode == keys.enter then continue = true end
     end
 end
 
