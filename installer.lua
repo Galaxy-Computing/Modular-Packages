@@ -46,7 +46,7 @@ end
 if #tArgs == 1 then
     if tArgs[1] == "postreboot" then -- we're after the reboot
         screen("   The installer is now installing software.","")
-        for i,name in ipairs(packages) do
+        for i,name in ipairs(installpackages) do
             screen("   The installer is now installing software.","Installing "..name.."... ("..i.."/"..#packages..")")
             local win = window.create(term.current(),1,1,1,1,false)
             term.redirect(win)
