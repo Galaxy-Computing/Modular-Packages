@@ -1,9 +1,44 @@
 {
-  "buildmod",
-  "buildsys",
-  "craftos-bin",
-  "modctl",
-  "modular-kernel",
-  "shell",
-  "sudo",
+  [ "craftos-bin" ] = {
+    "craftos-bin",
+    false,
+    "1.9:1.0-1",
+    true,
+  },
+  [ "buildmod" ] = {
+    "buildmod",
+    true,
+    "1.0-1",
+    false,
+  },
+  [ "buildsys" ] = {
+    "buildsys",
+    true,
+    "1.0-1",
+    false,
+  },
+  [ "modctl" ] = {
+    "modctl",
+    true,
+    "1.0-1",
+    true,
+  },
+  [ "modular-kernel" ] = {
+    "modular-kernel",
+    false,
+    "1.0-1",
+    true,
+  },
+  [ "shell" ] = {
+    "shell",
+    true,
+    "1.0-1",
+    true,
+  },
+  [ "sudo" ] = {
+    "sudo",
+    true,
+    "1.0-1",
+    false,
+  },
 }
