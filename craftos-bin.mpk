@@ -1,5 +1,1699 @@
 return {
-  [ "uname.lua" ] = "print(module.sysversion()..\" \".._HOST)",
+  [ "about.lua" ] = "-- SPDX-FileCopyrightText: 2021 The CC: Tweaked Developers\
+--\
+-- SPDX-License-Identifier: MPL-2.0\
+\
+-- Prints information about CraftOS\
+term.setTextColor(colors.yellow)\
+print(os.version() .. \" on \" .. _HOST)\
+term.setTextColor(colors.white)",
+  [ "meta.lua" ] = "return {\"craftos-bin\",false,\"1.9:1.0-2\",true}",
+  [ "motd.lua" ] = "-- SPDX-FileCopyrightText: 2020 The CC: Tweaked Developers\
+--\
+-- SPDX-License-Identifier: MPL-2.0\
+\
+if _CCPC_FIRST_RUN then\
+    print([[Welcome to CraftOS-PC! This is the ComputerCraft shell prompt, where you can run programs.\
+* Type \"programs\" to see the programs you can run.\
+* Type \"help <program>\" to see help for a specific program.\
+* Read the documentation at https://www.craftos-pc.cc/docs/.\
+* Report bugs to https://www.craftos-pc.cc/bugreport.\
+]])\
+elseif _CCPC_UPDATED_VERSION then\
+    print(\"CraftOS-PC has been updated to \" .. _HOST:match(\"CraftOS%-PC [%a]* ?(v[%d%.]+)\") .. \". To see the new changes, type \\\"help whatsnew\\\".\")\
+else\
+    local date = os.date(\"*t\")\
+    if date.year == 2021 then\
+        print(\"Thank you SquidDev!\")\
+    elseif date.month == 1 and date.day == 1 then\
+        print(\"Happy new year!\")\
+    elseif date.month == 12 and date.day == 24 then\
+        print(\"Merry X-mas!\")\
+    elseif date.month == 10 and date.day == 31 then\
+        print(\"OOoooOOOoooo! Spooky!\")\
+    elseif date.month == 4 and date.day == 28 then\
+        print(\"Ed Balls\")\
+    elseif date.month == 9 and date.day == 8 then\
+        print(\"Happy birthday, CraftOS-PC!\")\
+    else\
+        local tMotd = {}\
+\
+        for sPath in string.gmatch(settings.get(\"motd.path\"), \"[^:]+\") do\
+            if fs.exists(sPath) then\
+                for sLine in io.lines(sPath) do\
+                    table.insert(tMotd, sLine)\
+                end\
+            end\
+        end\
+\
+        if mobile and mobile.purchasePlugin then\
+            table.insert(tMotd, \"Want to add more features to CraftOS-PC? Buy additional plugins using the plugins command.\")\
+        end\
+\
+        if #tMotd == 0 then\
+            print(\"missingno\")\
+        else\
+            print(tMotd[math.random(1, #tMotd)])\
+        end\
+    end\
+end\
+",
+  [ "list.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+\
+-- Get all the files in the directory\
+local sDir = shell.dir()\
+if tArgs[1] ~= nil then\
+    sDir = shell.resolve(tArgs[1])\
+end\
+\
+if not fs.isDir(sDir) then\
+    printError(\"Not a directory\")\
+    return\
+end\
+\
+-- Sort into dirs/files, and calculate column count\
+local tAll = fs.list(sDir)\
+local tFiles = {}\
+local tDirs = {}\
+\
+local bShowHidden = settings.get(\"list.show_hidden\")\
+for _, sItem in pairs(tAll) do\
+    if bShowHidden or string.sub(sItem, 1, 1) ~= \".\" then\
+        local sPath = fs.combine(sDir, sItem)\
+        if fs.isDir(sPath) then\
+            table.insert(tDirs, sItem)\
+        else\
+            table.insert(tFiles, sItem)\
+        end\
+    end\
+end\
+table.sort(tDirs)\
+table.sort(tFiles)\
+\
+if term.isColour() then\
+    textutils.pagedTabulate(colors.green, tDirs, colors.white, tFiles)\
+else\
+    textutils.pagedTabulate(colors.lightGray, tDirs, colors.white, tFiles)\
+end\
+",
+  [ "time.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local nTime = os.time()\
+local nDay = os.day()\
+print(\"The time is \" .. textutils.formatTime(nTime, false) .. \" on Day \" .. nDay)\
+",
+  [ "eject.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+-- Get arguments\
+local tArgs = { ... }\
+if #tArgs == 0 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <drive>\")\
+    return\
+end\
+\
+local sDrive = tArgs[1]\
+\
+-- Check the disk exists\
+local bPresent = disk.isPresent(sDrive)\
+if not bPresent then\
+    print(\"Nothing in \" .. sDrive .. \" drive\")\
+    return\
+end\
+\
+disk.eject(sDrive)\
+",
+  [ "reboot.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+if term.isColour() then\
+    term.setTextColour(colours.blue)\
+end\
+print(\"Goodbye\")\
+term.setTextColour(colours.white)\
+\
+sleep(1)\
+os.reboot()\
+",
+  [ "fg.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+if not shell.openTab then\
+    printError(\"Requires multishell\")\
+    return\
+end\
+\
+local tArgs = { ... }\
+if #tArgs > 0 then\
+    local nTask = shell.openTab(table.unpack(tArgs))\
+    if nTask then\
+        shell.switchTab(nTask)\
+    end\
+else\
+    local nTask = shell.openTab(\"shell\")\
+    if nTask then\
+        shell.switchTab(nTask)\
+    end\
+end\
+",
+  [ "gps.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local function printUsage()\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usages:\")\
+    print(programName .. \" host\")\
+    print(programName .. \" host <x> <y> <z>\")\
+    print(programName .. \" locate\")\
+end\
+\
+local tArgs = { ... }\
+if #tArgs < 1 then\
+    printUsage()\
+    return\
+end\
+\
+ local sCommand = tArgs[1]\
+if sCommand == \"locate\" then\
+    -- \"gps locate\"\
+    -- Just locate this computer (this will print the results)\
+    gps.locate(2, true)\
+\
+elseif sCommand == \"host\" then\
+    -- \"gps host\"\
+    -- Act as a GPS host\
+    if pocket then\
+        print(\"GPS Hosts must be stationary\")\
+        return\
+    end\
+\
+    -- Find a modem\
+    local sModemSide = nil\
+    for _, sSide in ipairs(rs.getSides()) do\
+        if peripheral.getType(sSide) == \"modem\" and peripheral.call(sSide, \"isWireless\") then\
+            sModemSide = sSide\
+            break\
+        end\
+    end\
+\
+    if sModemSide == nil then\
+        print(\"No wireless modems found. 1 required.\")\
+        return\
+    end\
+\
+    -- Determine position\
+    local x, y, z\
+    if #tArgs >= 4 then\
+        -- Position is manually specified\
+        x = tonumber(tArgs[2])\
+        y = tonumber(tArgs[3])\
+        z = tonumber(tArgs[4])\
+        if x == nil or y == nil or z == nil then\
+            printUsage()\
+            return\
+        end\
+        print(\"Position is \" .. x .. \",\" .. y .. \",\" .. z)\
+    else\
+        -- Position is to be determined using locate\
+        x, y, z = gps.locate(2, true)\
+        if x == nil then\
+            print(\"Run \\\"gps host <x> <y> <z>\\\" to set position manually\")\
+            return\
+        end\
+    end\
+\
+    -- Open a channel\
+    local modem = peripheral.wrap(sModemSide)\
+    print(\"Opening channel on modem \" .. sModemSide)\
+    modem.open(gps.CHANNEL_GPS)\
+\
+    -- Serve requests indefinately\
+    local nServed = 0\
+    while true do\
+        local e, p1, p2, p3, p4, p5 = os.pullEvent(\"modem_message\")\
+        if e == \"modem_message\" then\
+            -- We received a message from a modem\
+            local sSide, sChannel, sReplyChannel, sMessage, nDistance = p1, p2, p3, p4, p5\
+            if sSide == sModemSide and sChannel == gps.CHANNEL_GPS and sMessage == \"PING\" and nDistance then\
+                -- We received a ping message on the GPS channel, send a response\
+                modem.transmit(sReplyChannel, gps.CHANNEL_GPS, { x, y, z })\
+\
+                -- Print the number of requests handled\
+                nServed = nServed + 1\
+                if nServed > 1 then\
+                    local _, y = term.getCursorPos()\
+                    term.setCursorPos(1, y - 1)\
+                end\
+                print(nServed .. \" GPS requests served\")\
+            end\
+        end\
+    end\
+else\
+    -- \"gps somethingelse\"\
+    -- Error\
+    printUsage()\
+end\
+",
+  [ "bg.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+if not shell.openTab then\
+    printError(\"Requires multishell\")\
+    return\
+end\
+\
+local tArgs = { ... }\
+if #tArgs > 0 then\
+    shell.openTab(table.unpack(tArgs))\
+else\
+    shell.openTab(\"shell\")\
+end\
+",
+  [ "drive.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+\
+-- Get where a directory is mounted\
+local sPath = shell.dir()\
+if tArgs[1] ~= nil then\
+    sPath = shell.resolve(tArgs[1])\
+end\
+\
+if fs.exists(sPath) then\
+    write(fs.getDrive(sPath) .. \" (\")\
+    local nSpace = fs.getFreeSpace(sPath)\
+    if nSpace >= 1000 * 1000 then\
+        print(math.floor(nSpace / (100 * 1000)) / 10 .. \"MB remaining)\")\
+    elseif nSpace >= 1000 then\
+        print(math.floor(nSpace / 100) / 10 .. \"KB remaining)\")\
+    else\
+        print(nSpace .. \"B remaining)\")\
+    end\
+else\
+    print(\"No such path\")\
+end\
+",
+  [ "label.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local function printUsage()\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usages:\")\
+    print(programName .. \" get\")\
+    print(programName .. \" get <drive>\")\
+    print(programName .. \" set <text>\")\
+    print(programName .. \" set <drive> <text>\")\
+    print(programName .. \" clear\")\
+    print(programName .. \" clear <drive>\")\
+end\
+\
+local function checkDrive(sDrive)\
+    if peripheral.getType(sDrive) == \"drive\" then\
+        -- Check the disk exists\
+        local bData = disk.hasData(sDrive)\
+        if not bData then\
+            print(\"No disk in \" .. sDrive .. \" drive\")\
+            return false\
+        end\
+    else\
+        print(\"No disk drive named \" .. sDrive)\
+        return false\
+    end\
+    return true\
+end\
+\
+local function get(sDrive)\
+    if sDrive ~= nil then\
+        if checkDrive(sDrive) then\
+            local sLabel = disk.getLabel(sDrive)\
+            if sLabel then\
+                print(\"Disk label is \\\"\" .. sLabel .. \"\\\"\")\
+            else\
+                print(\"No Disk label\")\
+            end\
+        end\
+    else\
+        local sLabel = os.getComputerLabel()\
+        if sLabel then\
+            print(\"Computer label is \\\"\" .. sLabel .. \"\\\"\")\
+        else\
+            print(\"No Computer label\")\
+        end\
+    end\
+end\
+\
+local function set(sDrive, sText)\
+    if sDrive ~= nil then\
+        if checkDrive(sDrive) then\
+            disk.setLabel(sDrive, sText)\
+            local sLabel = disk.getLabel(sDrive)\
+            if sLabel then\
+                print(\"Disk label set to \\\"\" .. sLabel .. \"\\\"\")\
+            else\
+                print(\"Disk label cleared\")\
+            end\
+        end\
+    else\
+        os.setComputerLabel(sText)\
+        local sLabel = os.getComputerLabel()\
+        if sLabel then\
+            print(\"Computer label set to \\\"\" .. sLabel .. \"\\\"\")\
+        else\
+            print(\"Computer label cleared\")\
+        end\
+    end\
+end\
+\
+local tArgs = { ... }\
+local sCommand = tArgs[1]\
+if sCommand == \"get\" then\
+    -- Get a label\
+    if #tArgs == 1 then\
+        get(nil)\
+    elseif #tArgs == 2 then\
+        get(tArgs[2])\
+    else\
+        printUsage()\
+    end\
+elseif sCommand == \"set\" then\
+    -- Set a label\
+    if #tArgs == 2 then\
+        set(nil, tArgs[2])\
+    elseif #tArgs == 3 then\
+        set(tArgs[2], tArgs[3])\
+    else\
+        printUsage()\
+    end\
+elseif sCommand == \"clear\" then\
+    -- Clear a label\
+    if #tArgs == 1 then\
+        set(nil, nil)\
+    elseif #tArgs == 2 then\
+        set(tArgs[2], nil)\
+    else\
+        printUsage()\
+    end\
+else\
+    printUsage()\
+end\
+",
+  [ "lua.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+if #tArgs > 0 then\
+    print(\"This is an interactive Lua prompt.\")\
+    print(\"To run a lua program, just type its name.\")\
+    return\
+end\
+\
+local pretty = require and require \"cc.pretty\" or dofile \"/rom/modules/main/cc/expect.lua\"\
+local exception = require and require \"cc.internal.exception\" or dofile \"/rom/modules/main/cc/internal/exception.lua\"\
+\
+local running = true\
+local tCommandHistory = {}\
+local tEnv = {\
+    [\"exit\"] = setmetatable({}, {\
+        __tostring = function() return \"Call exit() to exit.\" end,\
+        __call = function() running = false end,\
+    }),\
+    [\"_echo\"] = function(...)\
+        return ...\
+    end,\
+}\
+setmetatable(tEnv, { __index = _ENV })\
+\
+-- Replace our require with new instance that loads from the current directory\
+-- rather than from /rom/programs. This makes it more friendly to use and closer\
+-- to what you'd expect.\
+if shell then\
+    local make_package = require \"cc.require\".make\
+    local dir = shell.dir()\
+    _ENV.require, _ENV.package = make_package(_ENV, dir)\
+end\
+\
+if term.isColour() then\
+    term.setTextColour(colours.blue)\
+end\
+print(_G._CCPC_DEBUGGER_ACTIVE and \"Entering debugger.\" or \"Interactive Lua prompt.\")\
+print(\"Call exit() to exit.\")\
+term.setTextColour(colours.white)\
+\
+local chunk_idx, chunk_map = 1, {}\
+while running do\
+    --if term.isColour() then\
+    --    term.setTextColour( colours.yellow )\
+    --end\
+    write(_G._CCPC_DEBUGGER_ACTIVE and \"lua_debug> \" or \"lua> \")\
+    --term.setTextColour( colours.white )\
+\
+    local input = read(nil, tCommandHistory, function(sLine)\
+        if settings.get(\"lua.autocomplete\") then\
+            local nStartPos = string.find(sLine, \"[a-zA-Z0-9_%.:]+$\")\
+            if nStartPos then\
+                sLine = string.sub(sLine, nStartPos)\
+            end\
+            if #sLine > 0 then\
+                return textutils.complete(sLine, tEnv)\
+            end\
+        end\
+        return nil\
+    end)\
+    if input:match(\"%S\") and tCommandHistory[#tCommandHistory] ~= input then\
+        table.insert(tCommandHistory, input)\
+    end\
+    if settings.get(\"lua.warn_against_use_of_local\") and input:match(\"^%s*local%s+\") then\
+        if term.isColour() then\
+            term.setTextColour(colours.yellow)\
+        end\
+       print(\"To access local variables in later inputs, remove the local keyword.\")\
+       term.setTextColour(colours.white)\
+    end\
+\
+    local name, offset = \"=lua[\" .. chunk_idx .. \"]\", 0\
+\
+    local func, err = load(input, name, \"t\", tEnv)\
+    if load(\"return \" .. input) then\
+        -- We wrap the expression with a call to _echo(...), which prevents tail\
+        -- calls (and thus confusing errors). Note we check this is a valid\
+        -- expression separately, to avoid accepting inputs like `)--` (which are\
+        -- parsed as `_echo()--)`.\
+        func = load(\"return _echo(\" .. input .. \"\\n)\", name, \"t\", tEnv)\
+        offset = 13\
+    end\
+\
+    if func then\
+        chunk_map[name] = { contents = input, offset = offset }\
+        chunk_idx = chunk_idx + 1\
+\
+        local results = table.pack(exception.try(func))\
+        if results[1] then\
+            for i = 2, results.n do\
+                local value = results[i]\
+                local ok, serialised = pcall(pretty.pretty, value, {\
+                    function_args = settings.get(\"lua.function_args\"),\
+                    function_source = settings.get(\"lua.function_source\"),\
+                })\
+                if ok then\
+                    pretty.print(serialised)\
+                else\
+                    print(tostring(value))\
+                end\
+            end\
+        else\
+            printError(results[2])\
+            require \"cc.internal.exception\".report(results[2], results[3], chunk_map)\
+        end\
+    else\
+        local parser = require \"cc.internal.syntax\"\
+        if parser.parse_repl(input) then printError(err) end\
+    end\
+\
+end\
+",
+  [ "edit.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+-- Get file to edit\
+local tArgs = { ... }\
+if #tArgs == 0 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <path>\")\
+    return\
+end\
+\
+-- Error checking\
+local sPath = shell.resolve(tArgs[1])\
+local bReadOnly = fs.isReadOnly(sPath)\
+if fs.exists(sPath) and fs.isDir(sPath) then\
+    print(\"Cannot edit a directory.\")\
+    return\
+end\
+\
+-- Create .lua files by default\
+if not fs.exists(sPath) and not string.find(sPath, \"%.\") then\
+    local sExtension = settings.get(\"edit.default_extension\")\
+    if sExtension ~= \"\" and type(sExtension) == \"string\" then\
+        sPath = sPath .. \".\" .. sExtension\
+    end\
+end\
+\
+local x, y = 1, 1\
+local w, h = term.getSize()\
+local scrollX, scrollY = 0, 0\
+\
+local tLines = {}\
+local bRunning = true\
+\
+-- Colours\
+local highlightColour, keywordColour, commentColour, textColour, bgColour, stringColour, errorColour\
+if term.isColour() then\
+    bgColour = colours.black\
+    textColour = colours.white\
+    highlightColour = colours.blue\
+    keywordColour = colours.blue\
+    commentColour = colours.green\
+    stringColour = colours.red\
+    errorColour = colours.red\
+else\
+    bgColour = colours.black\
+    textColour = colours.white\
+    highlightColour = colours.white\
+    keywordColour = colours.white\
+    commentColour = colours.white\
+    stringColour = colours.white\
+    errorColour = colours.white\
+end\
+\
+local runHandler = [[multishell.setTitle(multishell.getCurrent(), %q)\
+local current = term.current()\
+local contents, name = %q, %q\
+local fn, err = load(contents, name, nil, _ENV)\
+if fn then\
+    local exception = require \"cc.internal.exception\"\
+    local ok, err, co = exception.try(fn, ...)\
+\
+    term.redirect(current)\
+    term.setTextColor(term.isColour() and colours.yellow or colours.white)\
+    term.setBackgroundColor(colours.black)\
+    term.setCursorBlink(false)\
+\
+    if not ok then\
+        printError(err)\
+        exception.report(err, co, { [name] = contents })\
+    end\
+else\
+    local parser = require \"cc.internal.syntax\"\
+    if parser.parse_program(contents) then printError(err) end\
+end\
+\
+local message = \"Press any key to continue.\"\
+if ok then message = \"Program finished. \" .. message end\
+local _, y = term.getCursorPos()\
+local w, h = term.getSize()\
+local wrapped = require(\"cc.strings\").wrap(message, w)\
+\
+local start_y = h - #wrapped + 1\
+if y >= start_y then term.scroll(y - start_y + 1) end\
+for i = 1, #wrapped do\
+    term.setCursorPos(1, start_y + i - 1)\
+    term.write(wrapped[i])\
+end\
+os.pullEvent('key')\
+require \"cc.internal.event\".discard_char()\
+]]\
+\
+-- Menus\
+local bMenu = false\
+local nMenuItem = 1\
+local tMenuItems = {}\
+if not bReadOnly then\
+    table.insert(tMenuItems, \"Save\")\
+end\
+if shell.openTab then\
+    table.insert(tMenuItems, \"Run\")\
+end\
+if peripheral.find(\"printer\") then\
+    table.insert(tMenuItems, \"Print\")\
+end\
+table.insert(tMenuItems, \"Exit\")\
+\
+local status_ok, status_text\
+local function set_status(text, ok)\
+    status_ok = ok ~= false\
+    status_text = text\
+end\
+\
+if not bReadOnly and fs.getFreeSpace(sPath) < 1024 then\
+    set_status(\"Disk is low on space\", false)\
+else\
+    local message\
+    if term.isColour() then\
+        message = \"Press Ctrl or click here to access menu\"\
+    else\
+        message = \"Press Ctrl to access menu\"\
+    end\
+\
+    if #message > w - 5 then\
+        message = \"Press Ctrl for menu\"\
+    end\
+\
+    set_status(message)\
+end\
+\
+local function load(_sPath)\
+    tLines = {}\
+    if fs.exists(_sPath) then\
+        local file = io.open(_sPath, \"r\")\
+        local sLine = file:read()\
+        while sLine do\
+            table.insert(tLines, sLine)\
+            sLine = file:read()\
+        end\
+        file:close()\
+    end\
+\
+    if #tLines == 0 then\
+        table.insert(tLines, \"\")\
+    end\
+end\
+\
+local function save(_sPath, fWrite)\
+    -- Create intervening folder\
+    local sDir = _sPath:sub(1, _sPath:len() - fs.getName(_sPath):len())\
+    if not fs.exists(sDir) then\
+        fs.makeDir(sDir)\
+    end\
+\
+    -- Save\
+    local file, fileerr\
+    local function innerSave()\
+        file, fileerr = fs.open(_sPath, \"w\")\
+        if file then\
+            if file then\
+                fWrite(file)\
+            end\
+        else\
+            error(\"Failed to open \" .. _sPath)\
+        end\
+    end\
+\
+    local ok, err = pcall(innerSave)\
+    if file then\
+        file.close()\
+    end\
+    return ok, err, fileerr\
+end\
+\
+local tKeywords = {\
+    [\"and\"] = true,\
+    [\"break\"] = true,\
+    [\"do\"] = true,\
+    [\"else\"] = true,\
+    [\"elseif\"] = true,\
+    [\"end\"] = true,\
+    [\"false\"] = true,\
+    [\"for\"] = true,\
+    [\"function\"] = true,\
+    [\"if\"] = true,\
+    [\"in\"] = true,\
+    [\"local\"] = true,\
+    [\"nil\"] = true,\
+    [\"not\"] = true,\
+    [\"or\"] = true,\
+    [\"repeat\"] = true,\
+    [\"return\"] = true,\
+    [\"then\"] = true,\
+    [\"true\"] = true,\
+    [\"until\"] = true,\
+    [\"while\"] = true,\
+}\
+\
+local function tryWrite(sLine, regex, colour)\
+    local match = string.match(sLine, regex)\
+    if match then\
+        if type(colour) == \"number\" then\
+            term.setTextColour(colour)\
+        else\
+            term.setTextColour(colour(match))\
+        end\
+        term.write(match)\
+        term.setTextColour(textColour)\
+        return string.sub(sLine, #match + 1)\
+    end\
+    return nil\
+end\
+\
+local function writeHighlighted(sLine)\
+    while #sLine > 0 do\
+        sLine =\
+            tryWrite(sLine, \"^%-%-%[%[.-%]%]\", commentColour) or\
+            tryWrite(sLine, \"^%-%-.*\", commentColour) or\
+            tryWrite(sLine, \"^\\\"\\\"\", stringColour) or\
+            tryWrite(sLine, \"^\\\".-[^\\\\]\\\"\", stringColour) or\
+            tryWrite(sLine, \"^\\'\\'\", stringColour) or\
+            tryWrite(sLine, \"^\\'.-[^\\\\]\\'\", stringColour) or\
+            tryWrite(sLine, \"^%[%[.-%]%]\", stringColour) or\
+            tryWrite(sLine, \"^[%w_]+\", function(match)\
+                if tKeywords[match] then\
+                    return keywordColour\
+                end\
+                return textColour\
+            end) or\
+            tryWrite(sLine, \"^[^%w_]\", textColour)\
+    end\
+end\
+\
+local tCompletions\
+local nCompletion\
+\
+local tCompleteEnv = _ENV\
+local function complete(sLine)\
+    if settings.get(\"edit.autocomplete\") then\
+        local nStartPos = string.find(sLine, \"[a-zA-Z0-9_%.:]+$\")\
+        if nStartPos then\
+            sLine = string.sub(sLine, nStartPos)\
+        end\
+        if #sLine > 0 then\
+            return textutils.complete(sLine, tCompleteEnv)\
+        end\
+    end\
+    return nil\
+end\
+\
+local function recomplete()\
+    local sLine = tLines[y]\
+    if not bMenu and not bReadOnly and x == #sLine + 1 then\
+        tCompletions = complete(sLine)\
+        if tCompletions and #tCompletions > 0 then\
+            nCompletion = 1\
+        else\
+            nCompletion = nil\
+        end\
+    else\
+        tCompletions = nil\
+        nCompletion = nil\
+    end\
+end\
+\
+local function writeCompletion(sLine)\
+    if nCompletion then\
+        local sCompletion = tCompletions[nCompletion]\
+        term.setTextColor(colours.white)\
+        term.setBackgroundColor(colours.grey)\
+        term.write(sCompletion)\
+        term.setTextColor(textColour)\
+        term.setBackgroundColor(bgColour)\
+    end\
+end\
+\
+local function redrawText()\
+    local cursorX, cursorY = x, y\
+    for y = 1, h - 1 do\
+        term.setCursorPos(1 - scrollX, y)\
+        term.clearLine()\
+\
+        local sLine = tLines[y + scrollY]\
+        if sLine ~= nil then\
+            writeHighlighted(sLine)\
+            if cursorY == y and cursorX == #sLine + 1 then\
+                writeCompletion()\
+            end\
+        end\
+    end\
+    term.setCursorPos(x - scrollX, y - scrollY)\
+end\
+\
+local function redrawLine(_nY)\
+    local sLine = tLines[_nY]\
+    if sLine then\
+        term.setCursorPos(1 - scrollX, _nY - scrollY)\
+        term.clearLine()\
+        writeHighlighted(sLine)\
+        if _nY == y and x == #sLine + 1 then\
+            writeCompletion()\
+        end\
+        term.setCursorPos(x - scrollX, _nY - scrollY)\
+    end\
+end\
+\
+local function redrawMenu()\
+    -- Clear line\
+    term.setCursorPos(1, h)\
+    term.clearLine()\
+\
+    -- Draw line numbers\
+    term.setCursorPos(w - #(\"Ln \" .. y) + 1, h)\
+    term.setTextColour(highlightColour)\
+    term.write(\"Ln \")\
+    term.setTextColour(textColour)\
+    term.write(y)\
+\
+    term.setCursorPos(1, h)\
+    if bMenu then\
+        -- Draw menu\
+        term.setTextColour(textColour)\
+        for nItem, sItem in pairs(tMenuItems) do\
+            if nItem == nMenuItem then\
+                term.setTextColour(highlightColour)\
+                term.write(\"[\")\
+                term.setTextColour(textColour)\
+                term.write(sItem)\
+                term.setTextColour(highlightColour)\
+                term.write(\"]\")\
+                term.setTextColour(textColour)\
+            else\
+                term.write(\" \" .. sItem .. \" \")\
+            end\
+        end\
+    else\
+        -- Draw status\
+        term.setTextColour(status_ok and highlightColour or errorColour)\
+        term.write(status_text)\
+        term.setTextColour(textColour)\
+    end\
+\
+    -- Reset cursor\
+    term.setCursorPos(x - scrollX, y - scrollY)\
+end\
+\
+local tMenuFuncs = {\
+    Save = function()\
+        if bReadOnly then\
+            set_status(\"Access denied\", false)\
+        else\
+            local ok, _, fileerr  = save(sPath, function(file)\
+                for _, sLine in ipairs(tLines) do\
+                    file.write(sLine .. \"\\n\")\
+                end\
+            end)\
+            if ok then\
+                set_status(\"Saved to \" .. sPath)\
+            else\
+                if fileerr then\
+                    set_status(\"Error saving: \" .. fileerr, false)\
+                else\
+                    set_status(\"Error saving to \" .. sPath, false)\
+                end\
+            end\
+        end\
+        redrawMenu()\
+    end,\
+    Print = function()\
+        local printer = peripheral.find(\"printer\")\
+        if not printer then\
+            set_status(\"No printer attached\", false)\
+            return\
+        end\
+\
+        local nPage = 0\
+        local sName = fs.getName(sPath)\
+        if printer.getInkLevel() < 1 then\
+            set_status(\"Printer out of ink\", false)\
+            return\
+        elseif printer.getPaperLevel() < 1 then\
+            set_status(\"Printer out of paper\", false)\
+            return\
+        end\
+\
+        local screenTerminal = term.current()\
+        local printerTerminal = {\
+            getCursorPos = printer.getCursorPos,\
+            setCursorPos = printer.setCursorPos,\
+            getSize = printer.getPageSize,\
+            write = printer.write,\
+        }\
+        printerTerminal.scroll = function()\
+            if nPage == 1 then\
+                printer.setPageTitle(sName .. \" (page \" .. nPage .. \")\")\
+            end\
+\
+            while not printer.newPage() do\
+                if printer.getInkLevel() < 1 then\
+                    set_status(\"Printer out of ink, please refill\", false)\
+                elseif printer.getPaperLevel() < 1 then\
+                    set_status(\"Printer out of paper, please refill\", false)\
+                else\
+                    set_status(\"Printer output tray full, please empty\", false)\
+                end\
+\
+                term.redirect(screenTerminal)\
+                redrawMenu()\
+                term.redirect(printerTerminal)\
+\
+                sleep(0.5)\
+            end\
+\
+            nPage = nPage + 1\
+            if nPage == 1 then\
+                printer.setPageTitle(sName)\
+            else\
+                printer.setPageTitle(sName .. \" (page \" .. nPage .. \")\")\
+            end\
+        end\
+\
+        bMenu = false\
+        term.redirect(printerTerminal)\
+        local ok, error = pcall(function()\
+            term.scroll()\
+            for _, sLine in ipairs(tLines) do\
+                print(sLine)\
+            end\
+        end)\
+        term.redirect(screenTerminal)\
+        if not ok then\
+            print(error)\
+        end\
+\
+        while not printer.endPage() do\
+            set_status(\"Printer output tray full, please empty\")\
+            redrawMenu()\
+            sleep(0.5)\
+        end\
+        bMenu = true\
+\
+        if nPage > 1 then\
+            set_status(\"Printed \" .. nPage .. \" Pages\")\
+        else\
+            set_status(\"Printed 1 Page\")\
+        end\
+        redrawMenu()\
+    end,\
+    Exit = function()\
+        bRunning = false\
+    end,\
+    Run = function()\
+        local sTitle = fs.getName(sPath)\
+        if sTitle:sub(-4) == \".lua\" then\
+            sTitle = sTitle:sub(1, -5)\
+        end\
+        local sTempPath = bReadOnly and \".temp.\" .. sTitle or fs.combine(fs.getDir(sPath), \".temp.\" .. sTitle)\
+        if fs.exists(sTempPath) then\
+            set_status(\"Error saving to \" .. sTempPath, false)\
+            return\
+        end\
+        local ok = save(sTempPath, function(file)\
+            file.write(runHandler:format(sTitle, table.concat(tLines, \"\\n\"), \"@/\" .. sPath))\
+        end)\
+        if ok then\
+            local nTask = shell.openTab(\"/\" .. sTempPath)\
+            if nTask then\
+                shell.switchTab(nTask)\
+            else\
+                set_status(\"Error starting Task\", false)\
+            end\
+            fs.delete(sTempPath)\
+        else\
+            set_status(\"Error saving to \" .. sTempPath, false)\
+        end\
+        redrawMenu()\
+    end,\
+}\
+\
+local function doMenuItem(_n)\
+    tMenuFuncs[tMenuItems[_n]]()\
+    if bMenu then\
+        bMenu = false\
+        term.setCursorBlink(true)\
+    end\
+    redrawMenu()\
+end\
+\
+local function setCursor(newX, newY)\
+    local _, oldY = x, y\
+    x, y = newX, newY\
+    local screenX = x - scrollX\
+    local screenY = y - scrollY\
+\
+    local bRedraw = false\
+    if screenX < 1 then\
+        scrollX = x - 1\
+        screenX = 1\
+        bRedraw = true\
+    elseif screenX > w then\
+        scrollX = x - w\
+        screenX = w\
+        bRedraw = true\
+    end\
+\
+    if screenY < 1 then\
+        scrollY = y - 1\
+        screenY = 1\
+        bRedraw = true\
+    elseif screenY > h - 1 then\
+        scrollY = y - (h - 1)\
+        screenY = h - 1\
+        bRedraw = true\
+    end\
+\
+    recomplete()\
+    if bRedraw then\
+        redrawText()\
+    elseif y ~= oldY then\
+        redrawLine(oldY)\
+        redrawLine(y)\
+    else\
+        redrawLine(y)\
+    end\
+    term.setCursorPos(screenX, screenY)\
+\
+    redrawMenu()\
+end\
+\
+-- Actual program functionality begins\
+load(sPath)\
+\
+term.setBackgroundColour(bgColour)\
+term.clear()\
+term.setCursorPos(x, y)\
+term.setCursorBlink(true)\
+\
+recomplete()\
+redrawText()\
+redrawMenu()\
+\
+local function acceptCompletion()\
+    if nCompletion then\
+        -- Append the completion\
+        local sCompletion = tCompletions[nCompletion]\
+        tLines[y] = tLines[y] .. sCompletion\
+        setCursor(x + #sCompletion , y)\
+    end\
+end\
+\
+-- Handle input\
+while bRunning do\
+    local sEvent, param, param2, param3 = os.pullEvent()\
+    if sEvent == \"key\" then\
+        if param == keys.up then\
+            -- Up\
+            if not bMenu then\
+                if nCompletion then\
+                    -- Cycle completions\
+                    nCompletion = nCompletion - 1\
+                    if nCompletion < 1 then\
+                        nCompletion = #tCompletions\
+                    end\
+                    redrawLine(y)\
+\
+                elseif y > 1 then\
+                    -- Move cursor up\
+                    setCursor(\
+                        math.min(x, #tLines[y - 1] + 1),\
+                        y - 1\
+                    )\
+                end\
+            end\
+\
+        elseif param == keys.down then\
+            -- Down\
+            if not bMenu then\
+                -- Move cursor down\
+                if nCompletion then\
+                    -- Cycle completions\
+                    nCompletion = nCompletion + 1\
+                    if nCompletion > #tCompletions then\
+                        nCompletion = 1\
+                    end\
+                    redrawLine(y)\
+\
+                elseif y < #tLines then\
+                    -- Move cursor down\
+                    setCursor(\
+                        math.min(x, #tLines[y + 1] + 1),\
+                        y + 1\
+                    )\
+                end\
+            end\
+\
+        elseif param == keys.tab then\
+            -- Tab\
+            if not bMenu and not bReadOnly then\
+                if nCompletion and x == #tLines[y] + 1 then\
+                    -- Accept autocomplete\
+                    acceptCompletion()\
+                else\
+                    -- Indent line\
+                    local sLine = tLines[y]\
+                    tLines[y] = string.sub(sLine, 1, x - 1) .. \"    \" .. string.sub(sLine, x)\
+                    setCursor(x + 4, y)\
+                end\
+            end\
+\
+        elseif param == keys.pageUp then\
+            -- Page Up\
+            if not bMenu then\
+                -- Move up a page\
+                local newY\
+                if y - (h - 1) >= 1 then\
+                    newY = y - (h - 1)\
+                else\
+                    newY = 1\
+                end\
+                setCursor(\
+                    math.min(x, #tLines[newY] + 1),\
+                    newY\
+                )\
+            end\
+\
+        elseif param == keys.pageDown then\
+            -- Page Down\
+            if not bMenu then\
+                -- Move down a page\
+                local newY\
+                if y + (h - 1) <= #tLines then\
+                    newY = y + (h - 1)\
+                else\
+                    newY = #tLines\
+                end\
+                local newX = math.min(x, #tLines[newY] + 1)\
+                setCursor(newX, newY)\
+            end\
+\
+        elseif param == keys.home then\
+            -- Home\
+            if not bMenu then\
+                -- Move cursor to the beginning\
+                if x > 1 then\
+                    setCursor(1, y)\
+                end\
+            end\
+\
+        elseif param == keys[\"end\"] then\
+            -- End\
+            if not bMenu then\
+                -- Move cursor to the end\
+                local nLimit = #tLines[y] + 1\
+                if x < nLimit then\
+                    setCursor(nLimit, y)\
+                end\
+            end\
+\
+        elseif param == keys.left then\
+            -- Left\
+            if not bMenu then\
+                if x > 1 then\
+                    -- Move cursor left\
+                    setCursor(x - 1, y)\
+                elseif x == 1 and y > 1 then\
+                    setCursor(#tLines[y - 1] + 1, y - 1)\
+                end\
+            else\
+                -- Move menu left\
+                nMenuItem = nMenuItem - 1\
+                if nMenuItem < 1 then\
+                    nMenuItem = #tMenuItems\
+                end\
+                redrawMenu()\
+            end\
+\
+        elseif param == keys.right then\
+            -- Right\
+            if not bMenu then\
+                local nLimit = #tLines[y] + 1\
+                if x < nLimit then\
+                    -- Move cursor right\
+                    setCursor(x + 1, y)\
+                elseif nCompletion and x == #tLines[y] + 1 then\
+                    -- Accept autocomplete\
+                    acceptCompletion()\
+                elseif x == nLimit and y < #tLines then\
+                    -- Go to next line\
+                    setCursor(1, y + 1)\
+                end\
+            else\
+                -- Move menu right\
+                nMenuItem = nMenuItem + 1\
+                if nMenuItem > #tMenuItems then\
+                    nMenuItem = 1\
+                end\
+                redrawMenu()\
+            end\
+\
+        elseif param == keys.delete then\
+            -- Delete\
+            if not bMenu and not bReadOnly then\
+                local nLimit = #tLines[y] + 1\
+                if x < nLimit then\
+                    local sLine = tLines[y]\
+                    tLines[y] = string.sub(sLine, 1, x - 1) .. string.sub(sLine, x + 1)\
+                    recomplete()\
+                    redrawLine(y)\
+                elseif y < #tLines then\
+                    tLines[y] = tLines[y] .. tLines[y + 1]\
+                    table.remove(tLines, y + 1)\
+                    recomplete()\
+                    redrawText()\
+                end\
+            end\
+\
+        elseif param == keys.backspace then\
+            -- Backspace\
+            if not bMenu and not bReadOnly then\
+                if x > 1 then\
+                    -- Remove character\
+                    local sLine = tLines[y]\
+                    if x > 4 and string.sub(sLine, x - 4, x - 1) == \"    \" and not string.sub(sLine, 1, x - 1):find(\"%S\") then\
+                        tLines[y] = string.sub(sLine, 1, x - 5) .. string.sub(sLine, x)\
+                        setCursor(x - 4, y)\
+                    else\
+                        tLines[y] = string.sub(sLine, 1, x - 2) .. string.sub(sLine, x)\
+                        setCursor(x - 1, y)\
+                    end\
+                elseif y > 1 then\
+                    -- Remove newline\
+                    local sPrevLen = #tLines[y - 1]\
+                    tLines[y - 1] = tLines[y - 1] .. tLines[y]\
+                    table.remove(tLines, y)\
+                    setCursor(sPrevLen + 1, y - 1)\
+                    redrawText()\
+                end\
+            end\
+\
+        elseif param == keys.enter or param == keys.numPadEnter then\
+            -- Enter/Numpad Enter\
+            if not bMenu and not bReadOnly then\
+                -- Newline\
+                local sLine = tLines[y]\
+                local _, spaces = string.find(sLine, \"^[ ]+\")\
+                if not spaces then\
+                    spaces = 0\
+                end\
+                tLines[y] = string.sub(sLine, 1, x - 1)\
+                table.insert(tLines, y + 1, string.rep(' ', spaces) .. string.sub(sLine, x))\
+                setCursor(spaces + 1, y + 1)\
+                redrawText()\
+\
+            elseif bMenu then\
+                -- Menu selection\
+                doMenuItem(nMenuItem)\
+\
+            end\
+\
+        elseif param == keys.leftCtrl or param == keys.rightCtrl then\
+            -- Menu toggle\
+            bMenu = not bMenu\
+            if bMenu then\
+                term.setCursorBlink(false)\
+            else\
+                term.setCursorBlink(true)\
+            end\
+            redrawMenu()\
+        elseif param == keys.rightAlt then\
+            if bMenu then\
+                bMenu = false\
+                term.setCursorBlink(true)\
+                redrawMenu()\
+            end\
+        end\
+\
+    elseif sEvent == \"char\" then\
+        if not bMenu and not bReadOnly then\
+            -- Input text\
+            local sLine = tLines[y]\
+            tLines[y] = string.sub(sLine, 1, x - 1) .. param .. string.sub(sLine, x)\
+            setCursor(x + 1, y)\
+\
+        elseif bMenu then\
+            -- Select menu items\
+            for n, sMenuItem in ipairs(tMenuItems) do\
+                if string.lower(string.sub(sMenuItem, 1, 1)) == string.lower(param) then\
+                    doMenuItem(n)\
+                    break\
+                end\
+            end\
+        end\
+\
+    elseif sEvent == \"paste\" then\
+        if not bReadOnly then\
+            -- Close menu if open\
+            if bMenu then\
+                bMenu = false\
+                term.setCursorBlink(true)\
+                redrawMenu()\
+            end\
+            -- Input text\
+            local sLine = tLines[y]\
+            tLines[y] = string.sub(sLine, 1, x - 1) .. param .. string.sub(sLine, x)\
+            setCursor(x + #param , y)\
+        end\
+\
+    elseif sEvent == \"mouse_click\" then\
+        local cx, cy = param2, param3\
+        if not bMenu then\
+            if param == 1 then\
+                -- Left click\
+                if cy < h then\
+                    local newY = math.min(math.max(scrollY + cy, 1), #tLines)\
+                    local newX = math.min(math.max(scrollX + cx, 1), #tLines[newY] + 1)\
+                    setCursor(newX, newY)\
+                else\
+                    bMenu = true\
+                    redrawMenu()\
+                end\
+            end\
+        else\
+            if cy == h then\
+                local nMenuPosEnd = 1\
+                local nMenuPosStart = 1\
+                for n, sMenuItem in ipairs(tMenuItems) do\
+                    nMenuPosEnd = nMenuPosEnd + #sMenuItem + 1\
+                    if cx > nMenuPosStart and cx < nMenuPosEnd then\
+                        doMenuItem(n)\
+                    end\
+                    nMenuPosEnd = nMenuPosEnd + 1\
+                    nMenuPosStart = nMenuPosEnd\
+                end\
+            else\
+                bMenu = false\
+                term.setCursorBlink(true)\
+                redrawMenu()\
+            end\
+        end\
+\
+    elseif sEvent == \"mouse_scroll\" then\
+        if not bMenu then\
+            if param == -1 then\
+                -- Scroll up\
+                if scrollY > 0 then\
+                    -- Move cursor up\
+                    scrollY = scrollY - 1\
+                    redrawText()\
+                end\
+\
+            elseif param == 1 then\
+                -- Scroll down\
+                local nMaxScroll = #tLines - (h - 1)\
+                if scrollY < nMaxScroll then\
+                    -- Move cursor down\
+                    scrollY = scrollY + 1\
+                    redrawText()\
+                end\
+\
+            end\
+        end\
+\
+    elseif sEvent == \"term_resize\" then\
+        w, h = term.getSize()\
+        setCursor(x, y)\
+        redrawMenu()\
+        redrawText()\
+\
+    end\
+end\
+\
+-- Cleanup\
+term.clear()\
+term.setCursorBlink(false)\
+term.setCursorPos(1, 1)\
+",
+  [ "help.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+local sTopic\
+if #tArgs > 0 then\
+    sTopic = tArgs[1]\
+else\
+    sTopic = \"intro\"\
+end\
+\
+if sTopic == \"index\" then\
+    print(\"Help topics available:\")\
+    local tTopics = help.topics()\
+    textutils.pagedTabulate(tTopics)\
+    return\
+end\
+\
+local strings = require \"cc.strings\"\
+\
+local function min_of(a, b, default)\
+    if not a and not b then return default end\
+    if not a then return b end\
+    if not b then return a end\
+    return math.min(a, b)\
+end\
+\
+--[[- Parse a markdown string, extracting headings and highlighting some basic\
+constructs.\
+The implementation of this is horrible. SquidDev shouldn't be allowed to write\
+parsers, especially ones they think might be \"performance critical\".\
+]]\
+local function parse_markdown(text)\
+    local len = #text\
+    local oob = len + 1\
+\
+    -- Some patterns to match headers and bullets on the start of lines.\
+    -- The `%f[^\\n\\0]` is some wonderful logic to match the start of a line /or/\
+    -- the start of the document.\
+    local heading = \"%f[^\\n%z](#+ +)([^\\n]*)\"\
+    local bullet = \"%f[^\\n%z]( *)[.*]( +)\"\
+    local code = \"`([^`]+)`\"\
+\
+    local new_text, fg, bg = \"\", \"\", \"\"\
+    local function append(txt, fore, back)\
+        new_text = new_text .. txt\
+        fg = fg .. (fore or \"0\"):rep(#txt)\
+        bg = bg .. (back or \"f\"):rep(#txt)\
+    end\
+\
+    local next_header = text:find(heading)\
+    local next_bullet = text:find(bullet)\
+    local next_block = min_of(next_header, next_bullet, oob)\
+\
+    local next_code, next_code_end = text:find(code)\
+\
+    local sections = {}\
+\
+    local start = 1\
+    while start <= len do\
+        if start == next_block then\
+            if start == next_header then\
+                local _, fin, head, content = text:find(heading, start)\
+                sections[#new_text + 1] = content\
+                append(head .. content, \"4\", \"f\")\
+                start = fin + 1\
+\
+                next_header = text:find(heading, start)\
+            else\
+                local _, fin, space, content = text:find(bullet, start)\
+                append(space .. \"\\7\" .. content)\
+                start = fin + 1\
+\
+                next_bullet = text:find(bullet, start)\
+            end\
+\
+            next_block = min_of(next_header, next_bullet, oob)\
+        elseif next_code and next_code_end < next_block then\
+            -- Basic inline code blocks\
+            if start < next_code then append(text:sub(start, next_code - 1)) end\
+            local content = text:match(code, next_code)\
+            append(content, \"0\", \"7\")\
+\
+            start = next_code_end + 1\
+            next_code, next_code_end = text:find(code, start)\
+        else\
+            -- Normal text\
+            append(text:sub(start, next_block - 1))\
+            start = next_block\
+\
+            -- Rescan for a new code block\
+            if next_code then next_code, next_code_end = text:find(code, start) end\
+        end\
+    end\
+\
+    return new_text, fg, bg, sections\
+end\
+\
+local function word_wrap_basic(text, width)\
+    local lines, fg, bg = strings.wrap(text, width), {}, {}\
+    local fg_line, bg_line = (\"0\"):rep(width), (\"f\"):rep(width)\
+\
+    -- Normalise the strings suitable for use with blit. We could skip this and\
+    -- just use term.write, but saves us a clearLine call.\
+    for k, line in pairs(lines) do\
+        lines[k] = strings.ensure_width(line, width)\
+        fg[k] = fg_line\
+        bg[k] = bg_line\
+    end\
+\
+    return lines, fg, bg, {}\
+end\
+\
+local function word_wrap_markdown(text, width)\
+    -- Add in styling for Markdown-formatted text.\
+    local text, fg, bg, sections = parse_markdown(text)\
+\
+    local lines = strings.wrap(text, width)\
+    local fglines, bglines, section_list, section_n = {}, {}, {}, 1\
+\
+    -- Normalise the strings suitable for use with blit. We could skip this and\
+    -- just use term.write, but saves us a clearLine call.\
+    local start = 1\
+    for k, line in pairs(lines) do\
+        -- I hate this with a burning passion, but it works!\
+        local pos = text:find(line, start, true)\
+        lines[k], fglines[k], bglines[k] =\
+            strings.ensure_width(line, width),\
+            strings.ensure_width(fg:sub(pos, pos + #line), width),\
+            strings.ensure_width(bg:sub(pos, pos + #line), width)\
+\
+        if sections[pos] then\
+            section_list[section_n], section_n = { content = sections[pos], offset = k - 1 }, section_n + 1\
+        end\
+\
+        start = pos + 1\
+    end\
+\
+    return lines, fglines, bglines, section_list\
+end\
+\
+local sFile = help.lookup(sTopic)\
+local file = sFile ~= nil and io.open(sFile) or nil\
+if not file then\
+    printError(\"No help available\")\
+    return\
+end\
+\
+local contents = file:read(\"*a\")\
+file:close()\
+-- Trim trailing newlines from the file to avoid displaying a blank line.\
+if contents:sub(-1) == \"\\n\" then contents:sub(1, -2) end\
+\
+local word_wrap = sFile:sub(-3) == \".md\" and word_wrap_markdown or word_wrap_basic\
+local width, height = term.getSize()\
+local content_height = height - 1 -- Height of the content box.\
+local lines, fg, bg, sections = word_wrap(contents, width)\
+local print_height = #lines\
+\
+-- If we fit within the screen, just display without pagination.\
+if print_height <= content_height then\
+    local _, y = term.getCursorPos()\
+    for i = 1, print_height do\
+        if y + i - 1 > height then\
+            term.scroll(1)\
+            term.setCursorPos(1, height)\
+        else\
+            term.setCursorPos(1, y + i - 1)\
+        end\
+\
+        term.blit(lines[i], fg[i], bg[i])\
+    end\
+    return\
+end\
+\
+local current_section = nil\
+local offset = 0\
+\
+--- Find the currently visible section, or nil if this document has no sections.\
+--\
+-- This could potentially be a binary search, but right now it's not worth it.\
+local function find_section()\
+    for i = #sections, 1, -1 do\
+        if sections[i].offset <= offset then\
+            return i\
+        end\
+    end\
+end\
+\
+local function draw_menu()\
+    term.setTextColor(colors.yellow)\
+    term.setCursorPos(1, height)\
+    term.clearLine()\
+\
+    local tag = \"Help: \" .. sTopic\
+    if current_section then\
+        tag = tag .. (\" (%s)\"):format(sections[current_section].content)\
+    end\
+    term.write(tag)\
+\
+    if width >= #tag + 16 then\
+        term.setCursorPos(width - 14, height)\
+        term.write(\"Press Q to exit\")\
+    end\
+end\
+\
+\
+local function draw()\
+    for y = 1, content_height do\
+        term.setCursorPos(1, y)\
+        if y + offset > print_height then\
+            -- Should only happen if we resize the terminal to a larger one\
+            -- than actually needed for the current text.\
+            term.clearLine()\
+        else\
+            term.blit(lines[y + offset], fg[y + offset], bg[y + offset])\
+        end\
+    end\
+\
+    local new_section = find_section()\
+    if new_section ~= current_section then\
+        current_section = new_section\
+        draw_menu()\
+    end\
+end\
+\
+draw()\
+draw_menu()\
+\
+while true do\
+    local event, param = os.pullEventRaw()\
+    if event == \"key\" then\
+        if param == keys.up and offset > 0 then\
+            offset = offset - 1\
+            draw()\
+        elseif param == keys.down and offset < print_height - content_height then\
+            offset = offset + 1\
+            draw()\
+        elseif param == keys.pageUp and offset > 0 then\
+            offset = math.max(offset - content_height + 1, 0)\
+            draw()\
+        elseif param == keys.pageDown and offset < print_height - content_height then\
+            offset = math.min(offset + content_height - 1, print_height - content_height)\
+            draw()\
+        elseif param == keys.home then\
+            offset = 0\
+            draw()\
+        elseif param == keys.left and current_section and current_section > 1 then\
+            offset = sections[current_section - 1].offset\
+            draw()\
+        elseif param == keys.right and current_section and current_section < #sections then\
+            offset = sections[current_section + 1].offset\
+            draw()\
+        elseif param == keys[\"end\"] then\
+            offset = print_height - content_height\
+            draw()\
+        elseif param == keys.q then\
+            require \"cc.internal.event\".discard_char()\
+            break\
+        end\
+    elseif event == \"mouse_scroll\" then\
+        if param < 0 and offset > 0 then\
+            offset = offset - 1\
+            draw()\
+        elseif param > 0 and offset <= print_height - content_height then\
+            offset = offset + 1\
+            draw()\
+        end\
+    elseif event == \"term_resize\" then\
+        local new_width, new_height = term.getSize()\
+\
+        if new_width ~= width then\
+            lines, fg, bg = word_wrap(contents, new_width)\
+            print_height = #lines\
+        end\
+\
+        width, height = new_width, new_height\
+        content_height = height - 1\
+        offset = math.max(math.min(offset, print_height - content_height), 0)\
+        draw()\
+        draw_menu()\
+    elseif event == \"terminate\" then\
+        break\
+    end\
+end\
+\
+term.setCursorPos(1, 1)\
+term.clear()\
+",
   [ "env.lua" ] = "-- SPDX-FileCopyrightText: 2019 JackMacWindows\
 --\
 -- SPDX-License-Identifier: MIT\
@@ -44,6 +1738,112 @@ shell.setEnvironment(env)\
 shell.run(table.unpack(cmd))\
 shell.setPath(oldPath)\
 shell.setEnvironment(oldEnv)",
+  [ "programs.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local bAll = false\
+local tArgs = { ... }\
+if #tArgs > 0 and tArgs[1] == \"all\" then\
+    bAll = true\
+end\
+\
+local tPrograms = shell.programs(bAll)\
+textutils.pagedTabulate(tPrograms)\
+",
+  [ "mkdir.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+\
+if #tArgs < 1 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <paths>\")\
+    return\
+end\
+\
+for _, v in ipairs(tArgs) do\
+    local sNewDir = shell.resolve(v)\
+    if fs.exists(sNewDir) and not fs.isDir(sNewDir) then\
+        printError(v .. \": Destination exists\")\
+    elseif fs.isReadOnly(sNewDir) then\
+        printError(v .. \": Access denied\")\
+    else\
+        fs.makeDir(sNewDir)\
+    end\
+end\
+",
+  [ "useradd.lua" ] = "local tArgs = {...}\
+if module.config.users[module.currentUser][2] == 0 then\
+    write(\"password for \"..tArgs[1]..\": \")\
+    local pass = read(\"\")\
+    module.config.users[tArgs[1]] = {pass,1}\
+    module.saveConfig()\
+else\
+    print(\"useradd: must be ran as root\")\
+end",
+  [ "uname.lua" ] = "print(module.sysversion()..\" \".._HOST)",
+  [ "type.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+if #tArgs < 1 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <path>\")\
+    return\
+end\
+\
+local sPath = shell.resolve(tArgs[1])\
+if fs.exists(sPath) then\
+    if fs.isDir(sPath) then\
+        print(\"directory\")\
+    else\
+        print(\"file\")\
+    end\
+else\
+    print(\"No such path\")\
+end\
+",
+  [ "apis.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tApis = {}\
+for k, v in pairs(_G) do\
+    if type(k) == \"string\" and type(v) == \"table\" and k ~= \"_G\" then\
+        table.insert(tApis, k)\
+    end\
+end\
+table.insert(tApis, \"shell\")\
+table.insert(tApis, \"package\")\
+if multishell then\
+    table.insert(tApis, \"multishell\")\
+end\
+table.sort(tApis)\
+\
+textutils.pagedTabulate(tApis)\
+",
+  [ "exit.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+shell.exit()\
+",
+  [ "shutdown.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+if term.isColour() then\
+    term.setTextColour(colours.blue)\
+end\
+print(\"Goodbye\")\
+term.setTextColour(colours.white)\
+\
+sleep(1)\
+os.shutdown()\
+",
   [ "monitor.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
 --\
 -- SPDX-License-Identifier: LicenseRef-CCPL\
@@ -144,48 +1944,1094 @@ if not ok then\
     printError(param)\
 end\
 ",
-  [ "exit.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+  [ "autocomplete.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
 --\
 -- SPDX-License-Identifier: LicenseRef-CCPL\
 \
-shell.exit()\
+local completion = require \"cc.shell.completion\"\
+\
+-- Setup completion functions\
+\
+local function completePastebinPut(shell, text, previous)\
+    if previous[2] == \"put\" then\
+        return fs.complete(text, shell.dir(), true, false)\
+    end\
+end\
+\
+local function completeConfigPart2(shell, text, previous)\
+    if previous[2] == \"get\" or previous[2] == \"set\" then\
+        return completion.choice(shell, text, previous, config.list(), previous[2] == \"set\")\
+    end\
+end\
+\
+local function completeConfigPart3(shell, text, previous)\
+    if previous[2] == \"set\" then\
+        if config.getType(previous[3]) == \"boolean\" then return completion.choice(shell, text, previous, {\"true\", \"false\"})\
+        elseif previous[3] == \"mount_mode\" then return completion.choice(shell, text, previous, {\"none\", \"ro\", \"ro_strict\", \"rw\"}) end\
+    end\
+end\
+\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/alias.lua\", completion.build(nil, completion.program))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/cd.lua\", completion.build(completion.dir))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/clear.lua\", completion.build({ completion.choice, { \"screen\", \"palette\", \"all\" } }))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/copy.lua\", completion.build(\
+    { completion.dirOrFile, true },\
+    completion.dirOrFile\
+))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/delete.lua\", completion.build({ completion.dirOrFile, many = true }))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/drive.lua\", completion.build(completion.dir))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/edit.lua\", completion.build(completion.file))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/eject.lua\", completion.build(completion.peripheral))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/gps.lua\", completion.build({ completion.choice, { \"host\", \"host \", \"locate\" } }))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/help.lua\", completion.build(completion.help))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/id.lua\", completion.build(completion.peripheral))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/label.lua\", completion.build(\
+    { completion.choice, { \"get\", \"get \", \"set \", \"clear\", \"clear \" } },\
+    completion.peripheral\
+))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/list.lua\", completion.build(completion.dir))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/mkdir.lua\", completion.build({ completion.dir, many = true }))\
+\
+local complete_monitor_extra = { \"scale\" }\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/monitor.lua\", completion.build(\
+    function(shell, text, previous)\
+        local choices = completion.peripheral(shell, text, previous, true)\
+        for _, option in pairs(completion.choice(shell, text, previous, complete_monitor_extra, true)) do\
+            choices[#choices + 1] = option\
+        end\
+        return choices\
+    end,\
+    function(shell, text, previous)\
+        if previous[2] == \"scale\" then\
+            return completion.peripheral(shell, text, previous, true)\
+        else\
+            return completion.programWithArgs(shell, text, previous, 3)\
+        end\
+    end,\
+    {\
+        function(shell, text, previous)\
+            if previous[2] ~= \"scale\" then\
+                return completion.programWithArgs(shell, text, previous, 3)\
+            end\
+        end,\
+        many = true,\
+    }\
+))\
+\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/move.lua\", completion.build(\
+    { completion.dirOrFile, true },\
+    completion.dirOrFile\
+))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/redstone.lua\", completion.build(\
+    { completion.choice, { \"probe\", \"set \", \"pulse \" } },\
+    completion.side\
+))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/rename.lua\", completion.build(\
+    { completion.dirOrFile, true },\
+    completion.dirOrFile\
+))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/type.lua\", completion.build(completion.dirOrFile))\
+shell.setCompletionFunction(\"modular/modules/craftos-bin/set.lua\", completion.build({ completion.setting, true }))\
+\
+\
+-- Show MOTD\
+if settings.get(\"motd.enable\") then\
+    shell.run(\"motd\")\
+end\
 ",
-  [ "meta.lua" ] = "return {\"craftos-bin\",false,\"1.9:1.0-1\",true}",
-  [ "bg.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+  [ "delete.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
 --\
 -- SPDX-License-Identifier: LicenseRef-CCPL\
 \
-if not shell.openTab then\
-    printError(\"Requires multishell\")\
+local args = table.pack(...)\
+\
+if args.n < 1 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <paths>\")\
     return\
 end\
 \
-local tArgs = { ... }\
-if #tArgs > 0 then\
-    shell.openTab(table.unpack(tArgs))\
-else\
-    shell.openTab(\"shell\")\
+for i = 1, args.n do\
+    local files = fs.find(shell.resolve(args[i]))\
+    if #files > 0 then\
+        for _, file in ipairs(files) do\
+            if fs.isReadOnly(file) then\
+                printError(\"Cannot delete read-only file /\" .. file)\
+            elseif fs.isDriveRoot(file) then\
+                printError(\"Cannot delete mount /\" .. file)\
+                if fs.isDir(file) then\
+                    print(\"To delete its contents run rm /\" .. fs.combine(file, \"*\"))\
+                end\
+            else\
+                local ok, err = pcall(fs.delete, file)\
+                if not ok then\
+                    printError((err:gsub(\"^pcall: \", \"\")))\
+                end\
+            end\
+        end\
+    else\
+        printError(args[i] .. \": No matching files\")\
+    end\
 end\
 ",
-  [ "apis.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+  [ "move.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
 --\
 -- SPDX-License-Identifier: LicenseRef-CCPL\
 \
-local tApis = {}\
-for k, v in pairs(_G) do\
-    if type(k) == \"string\" and type(v) == \"table\" and k ~= \"_G\" then\
-        table.insert(tApis, k)\
+local tArgs = { ... }\
+if #tArgs < 2 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <source> <destination>\")\
+    return\
+end\
+\
+local sSource = shell.resolve(tArgs[1])\
+local sDest = shell.resolve(tArgs[2])\
+local tFiles = fs.find(sSource)\
+\
+local function sanity_checks(source, dest)\
+    if fs.exists(dest) then\
+        printError(\"Destination exists\")\
+        return false\
+    elseif fs.isReadOnly(dest) then\
+        printError(\"Destination is read-only\")\
+        return false\
+    elseif fs.isDriveRoot(source) then\
+        printError(\"Cannot move mount /\" .. source)\
+        return false\
+    elseif fs.isReadOnly(source) then\
+        printError(\"Cannot move read-only file /\" .. source)\
+        return false\
+    end\
+    return true\
+end\
+\
+if #tFiles > 0 then\
+    for _, sFile in ipairs(tFiles) do\
+        if fs.isDir(sDest) then\
+            local dest = fs.combine(sDest, fs.getName(sFile))\
+            if sanity_checks(sFile, dest) then\
+                fs.move(sFile, dest)\
+            end\
+        elseif #tFiles == 1 then\
+            if sanity_checks(sFile, sDest) then\
+                fs.move(sFile, sDest)\
+            end\
+        else\
+            printError(\"Cannot overwrite file multiple times\")\
+            return\
+        end\
+    end\
+else\
+    printError(\"No matching files\")\
+end\
+",
+  [ "alias.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+if #tArgs > 2 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <alias> <program>\")\
+    return\
+end\
+\
+local sAlias = tArgs[1]\
+local sProgram = tArgs[2]\
+\
+if sAlias and sProgram then\
+    -- Set alias\
+    shell.setAlias(sAlias, sProgram)\
+elseif sAlias then\
+    -- Clear alias\
+    shell.clearAlias(sAlias)\
+else\
+    -- List aliases\
+    local tAliases = shell.aliases()\
+    local tList = {}\
+    for sAlias, sCommand in pairs(tAliases) do\
+        table.insert(tList, sAlias .. \":\" .. sCommand)\
+    end\
+    table.sort(tList)\
+    textutils.pagedTabulate(tList)\
+end\
+",
+  [ "id.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local sDrive = nil\
+local tArgs = { ... }\
+if #tArgs > 0 then\
+    sDrive = tostring(tArgs[1])\
+end\
+\
+if sDrive == nil then\
+    print(\"This is computer #\" .. os.getComputerID())\
+\
+    local label = os.getComputerLabel()\
+    if label then\
+        print(\"This computer is labelled \\\"\" .. label .. \"\\\"\")\
+    end\
+\
+else\
+    if disk.hasAudio(sDrive) then\
+        local title = disk.getAudioTitle(sDrive)\
+        if title then\
+            print(\"Has audio track \\\"\" .. title .. \"\\\"\")\
+        else\
+            print(\"Has untitled audio\")\
+        end\
+        return\
+    end\
+\
+    if not disk.hasData(sDrive) then\
+        print(\"No disk in drive \" .. sDrive)\
+        return\
+    end\
+\
+    local id = disk.getID(sDrive)\
+    if id then\
+        print(\"The disk is #\" .. id)\
+    else\
+        print(\"Non-disk data source\")\
+    end\
+\
+    local label = disk.getLabel(sDrive)\
+    if label then\
+        print(\"Labelled \\\"\" .. label .. \"\\\"\")\
     end\
 end\
-table.insert(tApis, \"shell\")\
-table.insert(tApis, \"package\")\
-if multishell then\
-    table.insert(tApis, \"multishell\")\
-end\
-table.sort(tApis)\
-\
-textutils.pagedTabulate(tApis)\
 ",
+  [ "redstone.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+\
+local function printUsage()\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usages:\")\
+    print(programName .. \" probe\")\
+    print(programName .. \" set <side> <value>\")\
+    print(programName .. \" set <side> <color> <value>\")\
+    print(programName .. \" pulse <side> <count> <period>\")\
+end\
+\
+local sCommand = tArgs[1]\
+if sCommand == \"probe\" then\
+    -- \"redstone probe\"\
+    -- Regular input\
+    print(\"Redstone inputs: \")\
+\
+    local count = 0\
+    local bundledCount = 0\
+    for _, sSide in ipairs(redstone.getSides()) do\
+        if redstone.getBundledInput(sSide) > 0 then\
+            bundledCount = bundledCount + 1\
+        end\
+        if redstone.getInput(sSide) then\
+            if count > 0 then\
+                io.write(\", \")\
+            end\
+            io.write(sSide)\
+            count = count + 1\
+        end\
+    end\
+    if count > 0 then\
+        print(\".\")\
+    else\
+        print(\"None.\")\
+    end\
+\
+    -- Bundled input\
+    if bundledCount > 0 then\
+        print()\
+        print(\"Bundled inputs:\")\
+        for _, sSide in ipairs(redstone.getSides()) do\
+            local nInput = redstone.getBundledInput(sSide)\
+            if nInput ~= 0 then\
+                write(sSide .. \": \")\
+                local count = 0\
+                for sColour, nColour in pairs(colors) do\
+                    if type(nColour) == \"number\" and colors.test(nInput, nColour) then\
+                        if count > 0 then\
+                            write(\", \")\
+                        end\
+                        if term.isColour() then\
+                            term.setTextColour(nColour)\
+                        end\
+                        write(sColour)\
+                        if term.isColour() then\
+                            term.setTextColour(colours.white)\
+                        end\
+                        count = count + 1\
+                    end\
+                end\
+                print(\".\")\
+            end\
+        end\
+    end\
+\
+elseif sCommand == \"pulse\" then\
+    -- \"redstone pulse\"\
+    local sSide = tArgs[2]\
+    local nCount = tonumber(tArgs[3]) or 1\
+    local nPeriod = tonumber(tArgs[4]) or 0.5\
+    for _ = 1, nCount do\
+        redstone.setOutput(sSide, true)\
+        sleep(nPeriod / 2)\
+        redstone.setOutput(sSide, false)\
+        sleep(nPeriod / 2)\
+    end\
+\
+elseif sCommand == \"set\" then\
+    -- \"redstone set\"\
+    local sSide = tArgs[2]\
+    if #tArgs > 3 then\
+        -- Bundled cable output\
+        local sColour = tArgs[3]\
+        local nColour = colors[sColour] or colours[sColour]\
+        if type(nColour) ~= \"number\" then\
+            printError(\"No such color\")\
+            return\
+        end\
+\
+        local sValue = tArgs[4]\
+        if sValue == \"true\" then\
+            rs.setBundledOutput(sSide, colors.combine(rs.getBundledOutput(sSide), nColour))\
+        elseif sValue == \"false\" then\
+            rs.setBundledOutput(sSide, colors.subtract(rs.getBundledOutput(sSide), nColour))\
+        else\
+            print(\"Value must be boolean\")\
+        end\
+    else\
+        -- Regular output\
+        local sValue = tArgs[3]\
+        local nValue = tonumber(sValue)\
+        if sValue == \"true\" then\
+            rs.setOutput(sSide, true)\
+        elseif sValue == \"false\" then\
+            rs.setOutput(sSide, false)\
+        elseif nValue and nValue >= 0 and nValue <= 15 then\
+            rs.setAnalogOutput(sSide, nValue)\
+        else\
+            print(\"Value must be boolean or 0-15\")\
+        end\
+    end\
+\
+else\
+    -- Something else\
+    printUsage()\
+\
+end\
+",
+  [ "copy.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tArgs = { ... }\
+if #tArgs < 2 then\
+    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
+    print(\"Usage: \" .. programName .. \" <source> <destination>\")\
+    return\
+end\
+\
+local sSource = shell.resolve(tArgs[1])\
+local sDest = shell.resolve(tArgs[2])\
+local tFiles = fs.find(sSource)\
+if #tFiles > 0 then\
+    for _, sFile in ipairs(tFiles) do\
+        if fs.isDir(sDest) then\
+            fs.copy(sFile, fs.combine(sDest, fs.getName(sFile)))\
+        elseif #tFiles == 1 then\
+            if fs.exists(sDest) then\
+                 printError(\"Destination exists\")\
+            elseif fs.isReadOnly(sDest) then\
+                printError(\"Destination is read-only\")\
+            elseif fs.getFreeSpace(sDest) < fs.getSize(sFile) then\
+                printError(\"Not enough space\")\
+            else\
+                 fs.copy(sFile, sDest)\
+            end\
+        else\
+            printError(\"Cannot overwrite file multiple times\")\
+            return\
+        end\
+    end\
+else\
+    printError(\"No matching files\")\
+end\
+",
+  [ "peripherals.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+local tPeripherals = peripheral.getNames()\
+print(\"Attached Peripherals:\")\
+if #tPeripherals > 0 then\
+    for n = 1, #tPeripherals do\
+        local sPeripheral = tPeripherals[n]\
+        print(sPeripheral .. \" (\" .. table.concat({ peripheral.getType(sPeripheral) }, \", \") .. \")\")\
+    end\
+else\
+    print(\"None\")\
+end\
+",
+  [ "multishell.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+--\
+-- SPDX-License-Identifier: LicenseRef-CCPL\
+\
+--- Multishell allows multiple programs to be run at the same time.\
+--\
+-- When multiple programs are running, it displays a tab bar at the top of the\
+-- screen, which allows you to switch between programs. New programs can be\
+-- launched using the `fg` or `bg` programs, or using the @{shell.openTab} and\
+-- @{multishell.launch} functions.\
+--\
+-- Each process is identified by its ID, which corresponds to its position in\
+-- the tab list. As tabs may be opened and closed, this ID is _not_ constant\
+-- over a program's run. As such, be careful not to use stale IDs.\
+--\
+-- As with @{shell}, @{multishell} is not a \"true\" API. Instead, it is a\
+-- standard program, which launches a shell and injects its API into the shell's\
+-- environment. This API is not available in the global environment, and so is\
+-- not available to @{os.loadAPI|APIs}.\
+--\
+-- @module[module] multishell\
+-- @since 1.6\
+\
+local expect = dofile(\"rom/modules/main/cc/expect.lua\").expect\
+\
+-- Setup process switching\
+local parentTerm = term.current()\
+local w, h = parentTerm.getSize()\
+\
+local tProcesses = {}\
+local nCurrentProcess = nil\
+local nRunningProcess = nil\
+local bShowMenu = false\
+local bWindowsResized = false\
+local nScrollPos = 1\
+local bScrollRight = false\
+\
+local function selectProcess(n)\
+    if nCurrentProcess ~= n then\
+        if nCurrentProcess then\
+            local tOldProcess = tProcesses[nCurrentProcess]\
+            tOldProcess.window.setVisible(false)\
+        end\
+        nCurrentProcess = n\
+        if nCurrentProcess then\
+            local tNewProcess = tProcesses[nCurrentProcess]\
+            tNewProcess.window.setVisible(true)\
+            tNewProcess.bInteracted = true\
+        end\
+    end\
+end\
+\
+local function setProcessTitle(n, sTitle)\
+    tProcesses[n].sTitle = sTitle\
+end\
+\
+local function resumeProcess(nProcess, sEvent, ...)\
+    local tProcess = tProcesses[nProcess]\
+    local sFilter = tProcess.sFilter\
+    if sFilter == nil or sFilter == sEvent or sEvent == \"terminate\" then\
+        local nPreviousProcess = nRunningProcess\
+        nRunningProcess = nProcess\
+        term.redirect(tProcess.terminal)\
+        local ok, result = coroutine.resume(tProcess.co, sEvent, ...)\
+        tProcess.terminal = term.current()\
+        if ok then\
+            tProcess.sFilter = result\
+        else\
+            printError(result)\
+        end\
+        nRunningProcess = nPreviousProcess\
+    end\
+end\
+\
+local function launchProcess(bFocus, tProgramEnv, sProgramPath, ...)\
+    local tProgramArgs = table.pack(...)\
+    local nProcess = #tProcesses + 1\
+    local tProcess = {}\
+    tProcess.sTitle = fs.getName(sProgramPath)\
+    if bShowMenu then\
+        tProcess.window = window.create(parentTerm, 1, 2, w, h - 1, false)\
+    else\
+        tProcess.window = window.create(parentTerm, 1, 1, w, h, false)\
+    end\
+\
+    -- Restrict the public view of the window to normal redirect functions.\
+    tProcess.terminal = {}\
+    for k in pairs(term.native()) do tProcess.terminal[k] = tProcess.window[k] end\
+\
+    tProcess.co = coroutine.create(function()\
+        os.run(tProgramEnv, sProgramPath, table.unpack(tProgramArgs, 1, tProgramArgs.n))\
+        if not tProcess.bInteracted then\
+            term.setCursorBlink(false)\
+            print(\"Press any key to continue\")\
+            os.pullEvent(\"char\")\
+        end\
+    end)\
+    tProcess.sFilter = nil\
+    tProcess.bInteracted = false\
+    tProcesses[nProcess] = tProcess\
+    if bFocus then\
+        selectProcess(nProcess)\
+    end\
+    resumeProcess(nProcess)\
+    return nProcess\
+end\
+\
+local function cullProcess(nProcess)\
+    local tProcess = tProcesses[nProcess]\
+    if coroutine.status(tProcess.co) == \"dead\" then\
+        if nCurrentProcess == nProcess then\
+            selectProcess(nil)\
+        end\
+        table.remove(tProcesses, nProcess)\
+        if nCurrentProcess == nil then\
+            if nProcess > 1 then\
+                selectProcess(nProcess - 1)\
+            elseif #tProcesses > 0 then\
+                selectProcess(1)\
+            end\
+        end\
+        if nScrollPos ~= 1 then\
+            nScrollPos = nScrollPos - 1\
+        end\
+        return true\
+    end\
+    return false\
+end\
+\
+local function cullProcesses()\
+    local culled = false\
+    for n = #tProcesses, 1, -1 do\
+        culled = culled or cullProcess(n)\
+    end\
+    return culled\
+end\
+\
+-- Setup the main menu\
+local menuMainTextColor, menuMainBgColor, menuOtherTextColor, menuOtherBgColor\
+if parentTerm.isColor() then\
+    menuMainTextColor, menuMainBgColor = colors.blue, colors.gray\
+    menuOtherTextColor, menuOtherBgColor = colors.black, colors.lightGray\
+else\
+    menuMainTextColor, menuMainBgColor = colors.white, colors.gray\
+    menuOtherTextColor, menuOtherBgColor = colors.black, colors.lightGray\
+end\
+\
+local function redrawMenu()\
+    if bShowMenu then\
+        -- Draw menu\
+        parentTerm.setCursorPos(1, 1)\
+        parentTerm.setBackgroundColor(menuOtherBgColor)\
+        parentTerm.clearLine()\
+        local nCharCount = 0\
+        local nSize = parentTerm.getSize()\
+        if nScrollPos ~= 1 then\
+            parentTerm.setTextColor(menuOtherTextColor)\
+            parentTerm.setBackgroundColor(menuOtherBgColor)\
+            parentTerm.write(\"<\")\
+            nCharCount = 1\
+        end\
+        for n = nScrollPos, #tProcesses do  \
+            if n == nCurrentProcess then\
+                parentTerm.setTextColor(menuMainTextColor)\
+                parentTerm.setBackgroundColor(menuMainBgColor)\
+            else\
+                parentTerm.setTextColor(menuOtherTextColor)\
+                parentTerm.setBackgroundColor(menuOtherBgColor)\
+            end\
+            parentTerm.write(\" \" .. tProcesses[n].sTitle .. \" \")\
+            nCharCount = nCharCount + #tProcesses[n].sTitle + 2\
+        end\
+        if nCharCount > nSize then\
+            parentTerm.setTextColor(menuOtherTextColor)\
+            parentTerm.setBackgroundColor(menuOtherBgColor)\
+            parentTerm.setCursorPos(nSize, 1)\
+            parentTerm.write(\">\")\
+            bScrollRight = true\
+        else\
+            bScrollRight = false\
+        end\
+\
+        -- Put the cursor back where it should be\
+        local tProcess = tProcesses[nCurrentProcess]\
+        if tProcess then\
+            tProcess.window.restoreCursor()\
+        end\
+    end\
+end\
+\
+local function resizeWindows()\
+    local windowY, windowHeight\
+    if bShowMenu then\
+        windowY = 2\
+        windowHeight = h - 1\
+    else\
+        windowY = 1\
+        windowHeight = h\
+    end\
+    for n = 1, #tProcesses do\
+        local tProcess = tProcesses[n]\
+        local x, y = tProcess.window.getCursorPos()\
+        if y > windowHeight then\
+            tProcess.window.scroll(y - windowHeight)\
+            tProcess.window.setCursorPos(x, windowHeight)\
+        end\
+        tProcess.window.reposition(1, windowY, w, windowHeight)\
+    end\
+    bWindowsResized = true\
+end\
+\
+local function setMenuVisible(bVis)\
+    if bShowMenu ~= bVis then\
+        bShowMenu = bVis\
+        resizeWindows()\
+        redrawMenu()\
+    end\
+end\
+\
+local multishell = {} --- @export\
+\
+--- Get the currently visible process. This will be the one selected on\
+-- the tab bar.\
+--\
+-- Note, this is different to @{getCurrent}, which returns the process which is\
+-- currently executing.\
+--\
+-- @treturn number The currently visible process's index.\
+-- @see setFocus\
+function multishell.getFocus()\
+    return nCurrentProcess\
+end\
+\
+--- Change the currently visible process.\
+--\
+-- @tparam number n The process index to switch to.\
+-- @treturn boolean If the process was changed successfully. This will\
+-- return @{false} if there is no process with this id.\
+-- @see getFocus\
+function multishell.setFocus(n)\
+    expect(1, n, \"number\")\
+    if n >= 1 and n <= #tProcesses then\
+        selectProcess(n)\
+        redrawMenu()\
+        return true\
+    end\
+    return false\
+end\
+\
+--- Get the title of the given tab.\
+--\
+-- This starts as the name of the program, but may be changed using\
+-- @{multishell.setTitle}.\
+-- @tparam number n The process index.\
+-- @treturn string|nil The current process title, or @{nil} if the\
+-- process doesn't exist.\
+function multishell.getTitle(n)\
+    expect(1, n, \"number\")\
+    if n >= 1 and n <= #tProcesses then\
+        return tProcesses[n].sTitle\
+    end\
+    return nil\
+end\
+\
+--- Set the title of the given process.\
+--\
+-- @tparam number n The process index.\
+-- @tparam string title The new process title.\
+-- @see getTitle\
+-- @usage Change the title of the current process\
+--\
+--     multishell.setTitle(multishell.getCurrent(), \"Hello\")\
+function multishell.setTitle(n, title)\
+    expect(1, n, \"number\")\
+    expect(2, title, \"string\")\
+    if n >= 1 and n <= #tProcesses then\
+        setProcessTitle(n, title)\
+        redrawMenu()\
+    end\
+end\
+\
+--- Get the index of the currently running process.\
+--\
+-- @treturn number The currently running process.\
+function multishell.getCurrent()\
+    return nRunningProcess\
+end\
+\
+--- Start a new process, with the given environment, program and arguments.\
+--\
+-- The returned process index is not constant over the program's run. It can be\
+-- safely used immediately after launching (for instance, to update the title or\
+-- switch to that tab). However, after your program has yielded, it may no\
+-- longer be correct.\
+--\
+-- @tparam table tProgramEnv The environment to load the path under.\
+-- @tparam string sProgramPath The path to the program to run.\
+-- @param ... Additional arguments to pass to the program.\
+-- @treturn number The index of the created process.\
+-- @see os.run\
+-- @usage Run the \"hello\" program, and set its title to \"Hello!\"\
+--\
+--     local id = multishell.launch({}, \"/rom/programs/fun/hello.lua\")\
+--     multishell.setTitle(id, \"Hello!\")\
+function multishell.launch(tProgramEnv, sProgramPath, ...)\
+    expect(1, tProgramEnv, \"table\")\
+    expect(2, sProgramPath, \"string\")\
+    local previousTerm = term.current()\
+    setMenuVisible(true)\
+    local nResult = launchProcess(false, tProgramEnv, sProgramPath, ...)\
+    redrawMenu()\
+    term.redirect(previousTerm)\
+    return nResult\
+end\
+\
+--- Get the number of processes within this multishell.\
+--\
+-- @treturn number The number of processes.\
+function multishell.getCount()\
+    return #tProcesses\
+end\
+\
+-- Begin\
+parentTerm.clear()\
+setMenuVisible(true)\
+launchProcess(true, {\
+    [\"shell\"] = shell,\
+    [\"multishell\"] = multishell,\
+}, \"/modular/modules/shell/main.lua\", ...)\
+\
+-- Run processes\
+while #tProcesses > 0 do\
+    -- Get the event\
+    local tEventData = table.pack(os.pullEventRaw())\
+    local sEvent = tEventData[1]\
+    if sEvent == \"term_resize\" then\
+        -- Resize event\
+        w, h = parentTerm.getSize()\
+        resizeWindows()\
+        redrawMenu()\
+\
+    elseif sEvent == \"char\" or sEvent == \"key\" or sEvent == \"key_up\" or sEvent == \"paste\" or sEvent == \"terminate\" or sEvent == \"file_transfer\" then\
+        -- Basic input, just passthrough to current process\
+        resumeProcess(nCurrentProcess, table.unpack(tEventData, 1, tEventData.n))\
+        if cullProcess(nCurrentProcess) then\
+            setMenuVisible(true)\
+            redrawMenu()\
+        end\
+\
+    elseif sEvent == \"mouse_click\" then\
+        -- Click event\
+        local button, x, y = tEventData[2], tEventData[3], tEventData[4]\
+        if bShowMenu and y == 1 then\
+            -- Switch process\
+            if x == 1 and nScrollPos ~= 1 then\
+                nScrollPos = nScrollPos - 1\
+                redrawMenu()\
+            elseif bScrollRight and x == term.getSize() then\
+                nScrollPos = nScrollPos + 1\
+                redrawMenu()\
+            else\
+                local tabStart = 1\
+                if nScrollPos ~= 1 then\
+                    tabStart = 2\
+                end\
+                for n = nScrollPos, #tProcesses do\
+                    local tabEnd = tabStart + #tProcesses[n].sTitle + 1\
+                    if x >= tabStart and x <= tabEnd then\
+                        selectProcess(n)\
+                        redrawMenu()\
+                        break\
+                    end\
+                    tabStart = tabEnd + 1\
+                end\
+            end\
+        else\
+            -- Passthrough to current process\
+            resumeProcess(nCurrentProcess, sEvent, button, x, bShowMenu and y - 1 or y)\
+            if cullProcess(nCurrentProcess) then\
+                setMenuVisible(true)\
+                redrawMenu()\
+            end\
+        end\
+\
+    elseif sEvent == \"mouse_drag\" or sEvent == \"mouse_up\" or sEvent == \"mouse_scroll\" then\
+        -- Other mouse event\
+        local p1, x, y = tEventData[2], tEventData[3], tEventData[4]\
+        if bShowMenu and sEvent == \"mouse_scroll\" and y == 1 then\
+            if p1 == -1 and nScrollPos ~= 1 then\
+                nScrollPos = nScrollPos - 1\
+                redrawMenu()\
+            elseif bScrollRight and p1 == 1 then\
+                nScrollPos = nScrollPos + 1\
+                redrawMenu()\
+            end\
+        elseif not (bShowMenu and y == 1) then\
+            -- Passthrough to current process\
+            resumeProcess(nCurrentProcess, sEvent, p1, x, bShowMenu and y - 1 or y)\
+            if cullProcess(nCurrentProcess) then\
+                setMenuVisible(true)\
+                redrawMenu()\
+            end\
+        end\
+        \
+    elseif sEvent == \"_CCPC_mobile_keyboard_open\" and settings.get(\"shell.mobile_resize_with_keyboard\") then\
+        -- Resize event\
+        w, h = parentTerm.getSize(), tEventData[2]\
+        resizeWindows()\
+        redrawMenu()\
+    \
+    elseif sEvent == \"_CCPC_mobile_keyboard_close\" and settings.get(\"shell.mobile_resize_with_keyboard\") then\
+        -- Resize event\
+        w, h = parentTerm.getSize()\
+        resizeWindows()\
+        redrawMenu()\
+\
+    else\
+        -- Other event\
+        -- Passthrough to all processes\
+        local nLimit = #tProcesses -- Storing this ensures any new things spawned don't get the event\
+        for n = 1, nLimit do\
+            resumeProcess(n, table.unpack(tEventData, 1, tEventData.n))\
+        end\
+        if cullProcesses() then\
+            setMenuVisible(true)\
+            redrawMenu()\
+        end\
+    end\
+\
+    if bWindowsResized then\
+        -- Pass term_resize to all processes\
+        local nLimit = #tProcesses -- Storing this ensures any new things spawned don't get the event\
+        for n = 1, nLimit do\
+            resumeProcess(n, \"term_resize\")\
+        end\
+        bWindowsResized = false\
+        if cullProcesses() then\
+            setMenuVisible(true)\
+            redrawMenu()\
+        end\
+    end\
+end\
+\
+-- Shutdown\
+sleep(0.5)\
+os.shutdown()\
+",
+  [ "screenfetch.lua" ] = "-- SPDX-FileCopyrightText: 2019 JackMacWindows\
+--\
+-- SPDX-License-Identifier: MIT\
+\
+if os.pullEvent ~= nil then\
+\
+    local ccart, ccart_fg, ccart_bg, ccart_adv_fg, ccart_adv_bg, ccart_width\
+\
+    if ... == \"--small\" then\
+\
+        ccart = ([[\\159\\143\\143\\143\\143\\143\\143\\143\\144\
+\\150\\136\\144     \\150\
+\\150\\130 \\131    \\150\
+\\150       \\150\
+\\150       \\150\
+\\150      \\140\\150\
+         ]]):gsub(\"\\\\130\", \"\\130\"):gsub(\"\\\\131\", \"\\131\"):gsub(\"\\\\136\", \"\\136\"):gsub(\"\\\\140\", \"\\140\"):gsub(\"\\\\143\", \"\\143\"):gsub(\"\\\\144\", \"\\144\"):gsub(\"\\\\150\", \"\\149\"):gsub(\"\\\\159\", \"\\159\")\
+\
+        ccart_fg = [[ffffffff7\
+f00fffff7\
+f0f0ffff7\
+ffffffff8\
+ffffffff8\
+f888888f8\
+fffffffff]]\
+\
+        ccart_bg = [[77777777f\
+7ffffffff\
+7ffffffff\
+8ffffffff\
+8ffffffff\
+88888888f\
+fffffffff]]\
+\
+        ccart_adv_fg = [[ffffffffb\
+f00fffffb\
+f0f0ffffb\
+ffffffffb\
+ffffffffb\
+f444444db\
+fffffffff]]\
+\
+        ccart_adv_bg = [[bbbbbbbbf\
+bffffffff\
+bffffffff\
+bffffffff\
+bffffffff\
+bbbbbbbbf\
+fffffffff]]\
+\
+        ccart_width = 10\
+\
+    else\
+        ccart = [[------------------------\
+|                      |\
+| -------------------- |\
+| | \\                | |\
+| | / __             | |\
+| |                  | |\
+| |                  | |\
+| |                  | |\
+| |                  | |\
+| |                  | |\
+| |                  | |\
+| -------------------- |\
+|                      |\
+|                  [=] |\
+|                      |\
+------------------------]]\
+\
+        ccart_fg = [[ffffffffffffffffffffffff\
+f7777777777777777777777f\
+f7ffffffffffffffffffff7f\
+f7ff0fffffffffffffffff7f\
+f7ff0f00ffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8888888888888888888888f\
+f888888888888888888fff8f\
+f8888888888888888888888f\
+ffffffffffffffffffffffff]]\
+\
+        ccart_bg = [[ffffffffffffffffffffffff\
+f7777777777777777777777f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f7ffffffffffffffffffff7f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8ffffffffffffffffffff8f\
+f8888888888888888888888f\
+f888888888888888888fff8f\
+f8888888888888888888888f\
+ffffffffffffffffffffffff]]\
+\
+        ccart_adv_fg = [[ffffffffffffffffffffffff\
+f4444444444444444444444f\
+f4ffffffffffffffffffff4f\
+f4ff0fffffffffffffffff4f\
+f4ff0f00ffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4ffffffffffffffffffff4f\
+f4444444444444444444444f\
+f444444444444444444ddd4f\
+f4444444444444444444444f\
+ffffffffffffffffffffffff]]\
+\
+        ccart_adv_bg = [[ffffffffffffffffffffffff\
+fbbbbbbbbbbbbbbbbbbbbbbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbffffffffffffffffffffbf\
+fbbbbbbbbbbbbbbbbbbbbbbf\
+fbbbbbbbbbbbbbbbbbbdddbf\
+fbbbbbbbbbbbbbbbbbbbbbbf\
+ffffffffffffffffffffffff]]\
+\
+        ccart_width = 25\
+\
+    end\
+\
+    local function fg(l) if term.isColor() then return string.rep(\"b\", l) else return string.rep(\"8\", l) end end\
+    local function text(title, str) return {title .. str, fg(string.len(title)) .. string.rep(\"0\", string.len(str)), string.rep(\"f\", string.len(title .. str))} end\
+\
+    local function time(n)\
+        local h = math.floor(n / 3600)\
+        local m = math.floor(n / 60) % 60\
+        local s = n % 60\
+        local retval = s .. \"s\"\
+        if m > 0 or h > 0 then retval = m .. \"m \" .. retval end\
+        if h > 0 then retval = h .. \"h \" .. retval end\
+        return retval\
+    end\
+\
+    local function ext(retval)\
+        if debug ~= nil then table.insert(retval, text(\"    \", \"Debug enabled\")) end\
+        if http ~= nil then table.insert(retval, text(\"    \", \"HTTP enabled\")) \
+        if http.websocket ~= nil then table.insert(retval, text(\"    \", \"CC: Tweaked\")) end end\
+        if mounter ~= nil then table.insert(retval, text(\"    \", \"CraftOS-PC\")) end\
+        if term.setGraphicsMode ~= nil then table.insert(retval, text(\"    \", \"CraftOS-PC GFX\")) end\
+        if term.screenshot ~= nil then table.insert(retval, text(\"    \", \"CraftOS-PC 2\")) end\
+        if ccemux ~= nil then table.insert(retval, text(\"    \", \"CCEmuX\")) end\
+        if fs.exists(\".mbs\") or fs.exists(\"rom/.mbs\") then table.insert(retval, text(\"    \", \"MBS\")) end\
+        if type(kernel) == \"table\" then table.insert(retval, text(\"    \", \"CCKernel2\")) end\
+        return retval\
+    end\
+\
+    local function getRuntime()\
+        if os.about ~= nil then return string.sub(os.about(), 1, string.find(os.about(), \"\\n\"))\
+        elseif ccemux ~= nil then return ccemux.getVersion()\
+        elseif _MC_VERSION ~= nil then return _MC_VERSION\
+        else return \"Unknown\" end\
+    end\
+\
+    local sysinfo = {\
+        text(os.getComputerLabel() or \"Untitled Computer\", \"\"),\
+        text(\"Type: \", commands ~= nil and \"Command Computer\" or term.isColor() and \"Advanced Computer\" or \"Standard Computer\"),\
+        text(\"OS: \", os.version()),\
+        text(\"Runtime: \", getRuntime()),\
+        text(\"Lua: \", _VERSION),\
+        text(\"Host: \", _HOST),\
+        text(\"Uptime: \", time(os.clock())),\
+        text(\"Extensions: \", \"\")\
+    }\
+    ext(sysinfo)\
+    local lines, sw, sh = 2, term.getSize()\
+    term.clear()\
+    term.setCursorPos(1, 2)\
+    for i = 1, string.len(ccart), ccart_width do \
+        term.blit(string.sub(ccart, i, i+ccart_width-2), string.sub(term.isColor() and ccart_adv_fg or ccart_fg, i, i+ccart_width-2), string.sub(term.isColor() and ccart_adv_bg or ccart_bg, i, i+ccart_width-2))\
+        write(\"  \")\
+        if sysinfo[((i-1)/ccart_width)+1] ~= nil then term.blit(table.unpack(sysinfo[((i-1)/ccart_width)+1])) end\
+        print(\"\")\
+        lines = lines + 1\
+    end\
+    for i = lines - 1, #sysinfo do\
+        write(string.rep(\" \", ccart_width + 1))\
+        term.blit(table.unpack(sysinfo[i]))\
+        print(\"\")\
+    end\
+    print(\"\")\
+    if term.screenshot ~= nil then term.screenshot() end\
+    sleep(0.25)\
+\
+else print(\"Unknown computer type\") end",
   [ "import.lua" ] = "-- SPDX-FileCopyrightText: 2022 The CC: Tweaked Developers\
 --\
 -- SPDX-License-Identifier: MPL-2.0\
@@ -1631,1221 +4477,6 @@ if execCommand then shell.run(execCommand); return vars[\"?\"] end\
 \
 historyfile.close()\
 return shell_retval",
-  [ "id.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local sDrive = nil\
-local tArgs = { ... }\
-if #tArgs > 0 then\
-    sDrive = tostring(tArgs[1])\
-end\
-\
-if sDrive == nil then\
-    print(\"This is computer #\" .. os.getComputerID())\
-\
-    local label = os.getComputerLabel()\
-    if label then\
-        print(\"This computer is labelled \\\"\" .. label .. \"\\\"\")\
-    end\
-\
-else\
-    if disk.hasAudio(sDrive) then\
-        local title = disk.getAudioTitle(sDrive)\
-        if title then\
-            print(\"Has audio track \\\"\" .. title .. \"\\\"\")\
-        else\
-            print(\"Has untitled audio\")\
-        end\
-        return\
-    end\
-\
-    if not disk.hasData(sDrive) then\
-        print(\"No disk in drive \" .. sDrive)\
-        return\
-    end\
-\
-    local id = disk.getID(sDrive)\
-    if id then\
-        print(\"The disk is #\" .. id)\
-    else\
-        print(\"Non-disk data source\")\
-    end\
-\
-    local label = disk.getLabel(sDrive)\
-    if label then\
-        print(\"Labelled \\\"\" .. label .. \"\\\"\")\
-    end\
-end\
-",
-  [ "peripherals.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tPeripherals = peripheral.getNames()\
-print(\"Attached Peripherals:\")\
-if #tPeripherals > 0 then\
-    for n = 1, #tPeripherals do\
-        local sPeripheral = tPeripherals[n]\
-        print(sPeripheral .. \" (\" .. table.concat({ peripheral.getType(sPeripheral) }, \", \") .. \")\")\
-    end\
-else\
-    print(\"None\")\
-end\
-",
-  [ "cd.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-if #tArgs < 1 then\
-    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usage: \" .. programName .. \" <path>\")\
-    return\
-end\
-\
-local sNewDir = shell.resolve(tArgs[1])\
-if fs.isDir(sNewDir) then\
-    shell.setDir(sNewDir)\
-else\
-    print(\"Not a directory\")\
-    return\
-end\
-",
-  [ "delete.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local args = table.pack(...)\
-\
-if args.n < 1 then\
-    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usage: \" .. programName .. \" <paths>\")\
-    return\
-end\
-\
-for i = 1, args.n do\
-    local files = fs.find(shell.resolve(args[i]))\
-    if #files > 0 then\
-        for _, file in ipairs(files) do\
-            if fs.isReadOnly(file) then\
-                printError(\"Cannot delete read-only file /\" .. file)\
-            elseif fs.isDriveRoot(file) then\
-                printError(\"Cannot delete mount /\" .. file)\
-                if fs.isDir(file) then\
-                    print(\"To delete its contents run rm /\" .. fs.combine(file, \"*\"))\
-                end\
-            else\
-                local ok, err = pcall(fs.delete, file)\
-                if not ok then\
-                    printError((err:gsub(\"^pcall: \", \"\")))\
-                end\
-            end\
-        end\
-    else\
-        printError(args[i] .. \": No matching files\")\
-    end\
-end\
-",
-  [ "drive.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-\
--- Get where a directory is mounted\
-local sPath = shell.dir()\
-if tArgs[1] ~= nil then\
-    sPath = shell.resolve(tArgs[1])\
-end\
-\
-if fs.exists(sPath) then\
-    write(fs.getDrive(sPath) .. \" (\")\
-    local nSpace = fs.getFreeSpace(sPath)\
-    if nSpace >= 1000 * 1000 then\
-        print(math.floor(nSpace / (100 * 1000)) / 10 .. \"MB remaining)\")\
-    elseif nSpace >= 1000 then\
-        print(math.floor(nSpace / 100) / 10 .. \"KB remaining)\")\
-    else\
-        print(nSpace .. \"B remaining)\")\
-    end\
-else\
-    print(\"No such path\")\
-end\
-",
-  [ "label.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local function printUsage()\
-    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usages:\")\
-    print(programName .. \" get\")\
-    print(programName .. \" get <drive>\")\
-    print(programName .. \" set <text>\")\
-    print(programName .. \" set <drive> <text>\")\
-    print(programName .. \" clear\")\
-    print(programName .. \" clear <drive>\")\
-end\
-\
-local function checkDrive(sDrive)\
-    if peripheral.getType(sDrive) == \"drive\" then\
-        -- Check the disk exists\
-        local bData = disk.hasData(sDrive)\
-        if not bData then\
-            print(\"No disk in \" .. sDrive .. \" drive\")\
-            return false\
-        end\
-    else\
-        print(\"No disk drive named \" .. sDrive)\
-        return false\
-    end\
-    return true\
-end\
-\
-local function get(sDrive)\
-    if sDrive ~= nil then\
-        if checkDrive(sDrive) then\
-            local sLabel = disk.getLabel(sDrive)\
-            if sLabel then\
-                print(\"Disk label is \\\"\" .. sLabel .. \"\\\"\")\
-            else\
-                print(\"No Disk label\")\
-            end\
-        end\
-    else\
-        local sLabel = os.getComputerLabel()\
-        if sLabel then\
-            print(\"Computer label is \\\"\" .. sLabel .. \"\\\"\")\
-        else\
-            print(\"No Computer label\")\
-        end\
-    end\
-end\
-\
-local function set(sDrive, sText)\
-    if sDrive ~= nil then\
-        if checkDrive(sDrive) then\
-            disk.setLabel(sDrive, sText)\
-            local sLabel = disk.getLabel(sDrive)\
-            if sLabel then\
-                print(\"Disk label set to \\\"\" .. sLabel .. \"\\\"\")\
-            else\
-                print(\"Disk label cleared\")\
-            end\
-        end\
-    else\
-        os.setComputerLabel(sText)\
-        local sLabel = os.getComputerLabel()\
-        if sLabel then\
-            print(\"Computer label set to \\\"\" .. sLabel .. \"\\\"\")\
-        else\
-            print(\"Computer label cleared\")\
-        end\
-    end\
-end\
-\
-local tArgs = { ... }\
-local sCommand = tArgs[1]\
-if sCommand == \"get\" then\
-    -- Get a label\
-    if #tArgs == 1 then\
-        get(nil)\
-    elseif #tArgs == 2 then\
-        get(tArgs[2])\
-    else\
-        printUsage()\
-    end\
-elseif sCommand == \"set\" then\
-    -- Set a label\
-    if #tArgs == 2 then\
-        set(nil, tArgs[2])\
-    elseif #tArgs == 3 then\
-        set(tArgs[2], tArgs[3])\
-    else\
-        printUsage()\
-    end\
-elseif sCommand == \"clear\" then\
-    -- Clear a label\
-    if #tArgs == 1 then\
-        set(nil, nil)\
-    elseif #tArgs == 2 then\
-        set(tArgs[2], nil)\
-    else\
-        printUsage()\
-    end\
-else\
-    printUsage()\
-end\
-",
-  [ "alias.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-if #tArgs > 2 then\
-    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usage: \" .. programName .. \" <alias> <program>\")\
-    return\
-end\
-\
-local sAlias = tArgs[1]\
-local sProgram = tArgs[2]\
-\
-if sAlias and sProgram then\
-    -- Set alias\
-    shell.setAlias(sAlias, sProgram)\
-elseif sAlias then\
-    -- Clear alias\
-    shell.clearAlias(sAlias)\
-else\
-    -- List aliases\
-    local tAliases = shell.aliases()\
-    local tList = {}\
-    for sAlias, sCommand in pairs(tAliases) do\
-        table.insert(tList, sAlias .. \":\" .. sCommand)\
-    end\
-    table.sort(tList)\
-    textutils.pagedTabulate(tList)\
-end\
-",
-  [ "autocomplete.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local completion = require \"cc.shell.completion\"\
-\
--- Setup completion functions\
-\
-local function completePastebinPut(shell, text, previous)\
-    if previous[2] == \"put\" then\
-        return fs.complete(text, shell.dir(), true, false)\
-    end\
-end\
-\
-local function completeConfigPart2(shell, text, previous)\
-    if previous[2] == \"get\" or previous[2] == \"set\" then\
-        return completion.choice(shell, text, previous, config.list(), previous[2] == \"set\")\
-    end\
-end\
-\
-local function completeConfigPart3(shell, text, previous)\
-    if previous[2] == \"set\" then\
-        if config.getType(previous[3]) == \"boolean\" then return completion.choice(shell, text, previous, {\"true\", \"false\"})\
-        elseif previous[3] == \"mount_mode\" then return completion.choice(shell, text, previous, {\"none\", \"ro\", \"ro_strict\", \"rw\"}) end\
-    end\
-end\
-\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/alias.lua\", completion.build(nil, completion.program))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/cd.lua\", completion.build(completion.dir))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/clear.lua\", completion.build({ completion.choice, { \"screen\", \"palette\", \"all\" } }))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/copy.lua\", completion.build(\
-    { completion.dirOrFile, true },\
-    completion.dirOrFile\
-))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/delete.lua\", completion.build({ completion.dirOrFile, many = true }))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/drive.lua\", completion.build(completion.dir))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/edit.lua\", completion.build(completion.file))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/eject.lua\", completion.build(completion.peripheral))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/gps.lua\", completion.build({ completion.choice, { \"host\", \"host \", \"locate\" } }))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/help.lua\", completion.build(completion.help))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/id.lua\", completion.build(completion.peripheral))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/label.lua\", completion.build(\
-    { completion.choice, { \"get\", \"get \", \"set \", \"clear\", \"clear \" } },\
-    completion.peripheral\
-))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/list.lua\", completion.build(completion.dir))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/mkdir.lua\", completion.build({ completion.dir, many = true }))\
-\
-local complete_monitor_extra = { \"scale\" }\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/monitor.lua\", completion.build(\
-    function(shell, text, previous)\
-        local choices = completion.peripheral(shell, text, previous, true)\
-        for _, option in pairs(completion.choice(shell, text, previous, complete_monitor_extra, true)) do\
-            choices[#choices + 1] = option\
-        end\
-        return choices\
-    end,\
-    function(shell, text, previous)\
-        if previous[2] == \"scale\" then\
-            return completion.peripheral(shell, text, previous, true)\
-        else\
-            return completion.programWithArgs(shell, text, previous, 3)\
-        end\
-    end,\
-    {\
-        function(shell, text, previous)\
-            if previous[2] ~= \"scale\" then\
-                return completion.programWithArgs(shell, text, previous, 3)\
-            end\
-        end,\
-        many = true,\
-    }\
-))\
-\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/move.lua\", completion.build(\
-    { completion.dirOrFile, true },\
-    completion.dirOrFile\
-))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/redstone.lua\", completion.build(\
-    { completion.choice, { \"probe\", \"set \", \"pulse \" } },\
-    completion.side\
-))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/rename.lua\", completion.build(\
-    { completion.dirOrFile, true },\
-    completion.dirOrFile\
-))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/type.lua\", completion.build(completion.dirOrFile))\
-shell.setCompletionFunction(\"modular/modules/craftos-bin/set.lua\", completion.build({ completion.setting, true }))\
-\
-\
--- Show MOTD\
-if settings.get(\"motd.enable\") then\
-    shell.run(\"motd\")\
-end\
-",
-  [ "move.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-if #tArgs < 2 then\
-    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usage: \" .. programName .. \" <source> <destination>\")\
-    return\
-end\
-\
-local sSource = shell.resolve(tArgs[1])\
-local sDest = shell.resolve(tArgs[2])\
-local tFiles = fs.find(sSource)\
-\
-local function sanity_checks(source, dest)\
-    if fs.exists(dest) then\
-        printError(\"Destination exists\")\
-        return false\
-    elseif fs.isReadOnly(dest) then\
-        printError(\"Destination is read-only\")\
-        return false\
-    elseif fs.isDriveRoot(source) then\
-        printError(\"Cannot move mount /\" .. source)\
-        return false\
-    elseif fs.isReadOnly(source) then\
-        printError(\"Cannot move read-only file /\" .. source)\
-        return false\
-    end\
-    return true\
-end\
-\
-if #tFiles > 0 then\
-    for _, sFile in ipairs(tFiles) do\
-        if fs.isDir(sDest) then\
-            local dest = fs.combine(sDest, fs.getName(sFile))\
-            if sanity_checks(sFile, dest) then\
-                fs.move(sFile, dest)\
-            end\
-        elseif #tFiles == 1 then\
-            if sanity_checks(sFile, sDest) then\
-                fs.move(sFile, sDest)\
-            end\
-        else\
-            printError(\"Cannot overwrite file multiple times\")\
-            return\
-        end\
-    end\
-else\
-    printError(\"No matching files\")\
-end\
-",
-  [ "multishell.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
---- Multishell allows multiple programs to be run at the same time.\
---\
--- When multiple programs are running, it displays a tab bar at the top of the\
--- screen, which allows you to switch between programs. New programs can be\
--- launched using the `fg` or `bg` programs, or using the @{shell.openTab} and\
--- @{multishell.launch} functions.\
---\
--- Each process is identified by its ID, which corresponds to its position in\
--- the tab list. As tabs may be opened and closed, this ID is _not_ constant\
--- over a program's run. As such, be careful not to use stale IDs.\
---\
--- As with @{shell}, @{multishell} is not a \"true\" API. Instead, it is a\
--- standard program, which launches a shell and injects its API into the shell's\
--- environment. This API is not available in the global environment, and so is\
--- not available to @{os.loadAPI|APIs}.\
---\
--- @module[module] multishell\
--- @since 1.6\
-\
-local expect = dofile(\"rom/modules/main/cc/expect.lua\").expect\
-\
--- Setup process switching\
-local parentTerm = term.current()\
-local w, h = parentTerm.getSize()\
-\
-local tProcesses = {}\
-local nCurrentProcess = nil\
-local nRunningProcess = nil\
-local bShowMenu = false\
-local bWindowsResized = false\
-local nScrollPos = 1\
-local bScrollRight = false\
-\
-local function selectProcess(n)\
-    if nCurrentProcess ~= n then\
-        if nCurrentProcess then\
-            local tOldProcess = tProcesses[nCurrentProcess]\
-            tOldProcess.window.setVisible(false)\
-        end\
-        nCurrentProcess = n\
-        if nCurrentProcess then\
-            local tNewProcess = tProcesses[nCurrentProcess]\
-            tNewProcess.window.setVisible(true)\
-            tNewProcess.bInteracted = true\
-        end\
-    end\
-end\
-\
-local function setProcessTitle(n, sTitle)\
-    tProcesses[n].sTitle = sTitle\
-end\
-\
-local function resumeProcess(nProcess, sEvent, ...)\
-    local tProcess = tProcesses[nProcess]\
-    local sFilter = tProcess.sFilter\
-    if sFilter == nil or sFilter == sEvent or sEvent == \"terminate\" then\
-        local nPreviousProcess = nRunningProcess\
-        nRunningProcess = nProcess\
-        term.redirect(tProcess.terminal)\
-        local ok, result = coroutine.resume(tProcess.co, sEvent, ...)\
-        tProcess.terminal = term.current()\
-        if ok then\
-            tProcess.sFilter = result\
-        else\
-            printError(result)\
-        end\
-        nRunningProcess = nPreviousProcess\
-    end\
-end\
-\
-local function launchProcess(bFocus, tProgramEnv, sProgramPath, ...)\
-    local tProgramArgs = table.pack(...)\
-    local nProcess = #tProcesses + 1\
-    local tProcess = {}\
-    tProcess.sTitle = fs.getName(sProgramPath)\
-    if bShowMenu then\
-        tProcess.window = window.create(parentTerm, 1, 2, w, h - 1, false)\
-    else\
-        tProcess.window = window.create(parentTerm, 1, 1, w, h, false)\
-    end\
-\
-    -- Restrict the public view of the window to normal redirect functions.\
-    tProcess.terminal = {}\
-    for k in pairs(term.native()) do tProcess.terminal[k] = tProcess.window[k] end\
-\
-    tProcess.co = coroutine.create(function()\
-        os.run(tProgramEnv, sProgramPath, table.unpack(tProgramArgs, 1, tProgramArgs.n))\
-        if not tProcess.bInteracted then\
-            term.setCursorBlink(false)\
-            print(\"Press any key to continue\")\
-            os.pullEvent(\"char\")\
-        end\
-    end)\
-    tProcess.sFilter = nil\
-    tProcess.bInteracted = false\
-    tProcesses[nProcess] = tProcess\
-    if bFocus then\
-        selectProcess(nProcess)\
-    end\
-    resumeProcess(nProcess)\
-    return nProcess\
-end\
-\
-local function cullProcess(nProcess)\
-    local tProcess = tProcesses[nProcess]\
-    if coroutine.status(tProcess.co) == \"dead\" then\
-        if nCurrentProcess == nProcess then\
-            selectProcess(nil)\
-        end\
-        table.remove(tProcesses, nProcess)\
-        if nCurrentProcess == nil then\
-            if nProcess > 1 then\
-                selectProcess(nProcess - 1)\
-            elseif #tProcesses > 0 then\
-                selectProcess(1)\
-            end\
-        end\
-        if nScrollPos ~= 1 then\
-            nScrollPos = nScrollPos - 1\
-        end\
-        return true\
-    end\
-    return false\
-end\
-\
-local function cullProcesses()\
-    local culled = false\
-    for n = #tProcesses, 1, -1 do\
-        culled = culled or cullProcess(n)\
-    end\
-    return culled\
-end\
-\
--- Setup the main menu\
-local menuMainTextColor, menuMainBgColor, menuOtherTextColor, menuOtherBgColor\
-if parentTerm.isColor() then\
-    menuMainTextColor, menuMainBgColor = colors.blue, colors.gray\
-    menuOtherTextColor, menuOtherBgColor = colors.black, colors.lightGray\
-else\
-    menuMainTextColor, menuMainBgColor = colors.white, colors.gray\
-    menuOtherTextColor, menuOtherBgColor = colors.black, colors.lightGray\
-end\
-\
-local function redrawMenu()\
-    if bShowMenu then\
-        -- Draw menu\
-        parentTerm.setCursorPos(1, 1)\
-        parentTerm.setBackgroundColor(menuOtherBgColor)\
-        parentTerm.clearLine()\
-        local nCharCount = 0\
-        local nSize = parentTerm.getSize()\
-        if nScrollPos ~= 1 then\
-            parentTerm.setTextColor(menuOtherTextColor)\
-            parentTerm.setBackgroundColor(menuOtherBgColor)\
-            parentTerm.write(\"<\")\
-            nCharCount = 1\
-        end\
-        for n = nScrollPos, #tProcesses do  \
-            if n == nCurrentProcess then\
-                parentTerm.setTextColor(menuMainTextColor)\
-                parentTerm.setBackgroundColor(menuMainBgColor)\
-            else\
-                parentTerm.setTextColor(menuOtherTextColor)\
-                parentTerm.setBackgroundColor(menuOtherBgColor)\
-            end\
-            parentTerm.write(\" \" .. tProcesses[n].sTitle .. \" \")\
-            nCharCount = nCharCount + #tProcesses[n].sTitle + 2\
-        end\
-        if nCharCount > nSize then\
-            parentTerm.setTextColor(menuOtherTextColor)\
-            parentTerm.setBackgroundColor(menuOtherBgColor)\
-            parentTerm.setCursorPos(nSize, 1)\
-            parentTerm.write(\">\")\
-            bScrollRight = true\
-        else\
-            bScrollRight = false\
-        end\
-\
-        -- Put the cursor back where it should be\
-        local tProcess = tProcesses[nCurrentProcess]\
-        if tProcess then\
-            tProcess.window.restoreCursor()\
-        end\
-    end\
-end\
-\
-local function resizeWindows()\
-    local windowY, windowHeight\
-    if bShowMenu then\
-        windowY = 2\
-        windowHeight = h - 1\
-    else\
-        windowY = 1\
-        windowHeight = h\
-    end\
-    for n = 1, #tProcesses do\
-        local tProcess = tProcesses[n]\
-        local x, y = tProcess.window.getCursorPos()\
-        if y > windowHeight then\
-            tProcess.window.scroll(y - windowHeight)\
-            tProcess.window.setCursorPos(x, windowHeight)\
-        end\
-        tProcess.window.reposition(1, windowY, w, windowHeight)\
-    end\
-    bWindowsResized = true\
-end\
-\
-local function setMenuVisible(bVis)\
-    if bShowMenu ~= bVis then\
-        bShowMenu = bVis\
-        resizeWindows()\
-        redrawMenu()\
-    end\
-end\
-\
-local multishell = {} --- @export\
-\
---- Get the currently visible process. This will be the one selected on\
--- the tab bar.\
---\
--- Note, this is different to @{getCurrent}, which returns the process which is\
--- currently executing.\
---\
--- @treturn number The currently visible process's index.\
--- @see setFocus\
-function multishell.getFocus()\
-    return nCurrentProcess\
-end\
-\
---- Change the currently visible process.\
---\
--- @tparam number n The process index to switch to.\
--- @treturn boolean If the process was changed successfully. This will\
--- return @{false} if there is no process with this id.\
--- @see getFocus\
-function multishell.setFocus(n)\
-    expect(1, n, \"number\")\
-    if n >= 1 and n <= #tProcesses then\
-        selectProcess(n)\
-        redrawMenu()\
-        return true\
-    end\
-    return false\
-end\
-\
---- Get the title of the given tab.\
---\
--- This starts as the name of the program, but may be changed using\
--- @{multishell.setTitle}.\
--- @tparam number n The process index.\
--- @treturn string|nil The current process title, or @{nil} if the\
--- process doesn't exist.\
-function multishell.getTitle(n)\
-    expect(1, n, \"number\")\
-    if n >= 1 and n <= #tProcesses then\
-        return tProcesses[n].sTitle\
-    end\
-    return nil\
-end\
-\
---- Set the title of the given process.\
---\
--- @tparam number n The process index.\
--- @tparam string title The new process title.\
--- @see getTitle\
--- @usage Change the title of the current process\
---\
---     multishell.setTitle(multishell.getCurrent(), \"Hello\")\
-function multishell.setTitle(n, title)\
-    expect(1, n, \"number\")\
-    expect(2, title, \"string\")\
-    if n >= 1 and n <= #tProcesses then\
-        setProcessTitle(n, title)\
-        redrawMenu()\
-    end\
-end\
-\
---- Get the index of the currently running process.\
---\
--- @treturn number The currently running process.\
-function multishell.getCurrent()\
-    return nRunningProcess\
-end\
-\
---- Start a new process, with the given environment, program and arguments.\
---\
--- The returned process index is not constant over the program's run. It can be\
--- safely used immediately after launching (for instance, to update the title or\
--- switch to that tab). However, after your program has yielded, it may no\
--- longer be correct.\
---\
--- @tparam table tProgramEnv The environment to load the path under.\
--- @tparam string sProgramPath The path to the program to run.\
--- @param ... Additional arguments to pass to the program.\
--- @treturn number The index of the created process.\
--- @see os.run\
--- @usage Run the \"hello\" program, and set its title to \"Hello!\"\
---\
---     local id = multishell.launch({}, \"/rom/programs/fun/hello.lua\")\
---     multishell.setTitle(id, \"Hello!\")\
-function multishell.launch(tProgramEnv, sProgramPath, ...)\
-    expect(1, tProgramEnv, \"table\")\
-    expect(2, sProgramPath, \"string\")\
-    local previousTerm = term.current()\
-    setMenuVisible(true)\
-    local nResult = launchProcess(false, tProgramEnv, sProgramPath, ...)\
-    redrawMenu()\
-    term.redirect(previousTerm)\
-    return nResult\
-end\
-\
---- Get the number of processes within this multishell.\
---\
--- @treturn number The number of processes.\
-function multishell.getCount()\
-    return #tProcesses\
-end\
-\
--- Begin\
-parentTerm.clear()\
-setMenuVisible(true)\
-launchProcess(true, {\
-    [\"shell\"] = shell,\
-    [\"multishell\"] = multishell,\
-}, \"/modular/modules/shell/main.lua\", ...)\
-\
--- Run processes\
-while #tProcesses > 0 do\
-    -- Get the event\
-    local tEventData = table.pack(os.pullEventRaw())\
-    local sEvent = tEventData[1]\
-    if sEvent == \"term_resize\" then\
-        -- Resize event\
-        w, h = parentTerm.getSize()\
-        resizeWindows()\
-        redrawMenu()\
-\
-    elseif sEvent == \"char\" or sEvent == \"key\" or sEvent == \"key_up\" or sEvent == \"paste\" or sEvent == \"terminate\" or sEvent == \"file_transfer\" then\
-        -- Basic input, just passthrough to current process\
-        resumeProcess(nCurrentProcess, table.unpack(tEventData, 1, tEventData.n))\
-        if cullProcess(nCurrentProcess) then\
-            setMenuVisible(true)\
-            redrawMenu()\
-        end\
-\
-    elseif sEvent == \"mouse_click\" then\
-        -- Click event\
-        local button, x, y = tEventData[2], tEventData[3], tEventData[4]\
-        if bShowMenu and y == 1 then\
-            -- Switch process\
-            if x == 1 and nScrollPos ~= 1 then\
-                nScrollPos = nScrollPos - 1\
-                redrawMenu()\
-            elseif bScrollRight and x == term.getSize() then\
-                nScrollPos = nScrollPos + 1\
-                redrawMenu()\
-            else\
-                local tabStart = 1\
-                if nScrollPos ~= 1 then\
-                    tabStart = 2\
-                end\
-                for n = nScrollPos, #tProcesses do\
-                    local tabEnd = tabStart + #tProcesses[n].sTitle + 1\
-                    if x >= tabStart and x <= tabEnd then\
-                        selectProcess(n)\
-                        redrawMenu()\
-                        break\
-                    end\
-                    tabStart = tabEnd + 1\
-                end\
-            end\
-        else\
-            -- Passthrough to current process\
-            resumeProcess(nCurrentProcess, sEvent, button, x, bShowMenu and y - 1 or y)\
-            if cullProcess(nCurrentProcess) then\
-                setMenuVisible(true)\
-                redrawMenu()\
-            end\
-        end\
-\
-    elseif sEvent == \"mouse_drag\" or sEvent == \"mouse_up\" or sEvent == \"mouse_scroll\" then\
-        -- Other mouse event\
-        local p1, x, y = tEventData[2], tEventData[3], tEventData[4]\
-        if bShowMenu and sEvent == \"mouse_scroll\" and y == 1 then\
-            if p1 == -1 and nScrollPos ~= 1 then\
-                nScrollPos = nScrollPos - 1\
-                redrawMenu()\
-            elseif bScrollRight and p1 == 1 then\
-                nScrollPos = nScrollPos + 1\
-                redrawMenu()\
-            end\
-        elseif not (bShowMenu and y == 1) then\
-            -- Passthrough to current process\
-            resumeProcess(nCurrentProcess, sEvent, p1, x, bShowMenu and y - 1 or y)\
-            if cullProcess(nCurrentProcess) then\
-                setMenuVisible(true)\
-                redrawMenu()\
-            end\
-        end\
-        \
-    elseif sEvent == \"_CCPC_mobile_keyboard_open\" and settings.get(\"shell.mobile_resize_with_keyboard\") then\
-        -- Resize event\
-        w, h = parentTerm.getSize(), tEventData[2]\
-        resizeWindows()\
-        redrawMenu()\
-    \
-    elseif sEvent == \"_CCPC_mobile_keyboard_close\" and settings.get(\"shell.mobile_resize_with_keyboard\") then\
-        -- Resize event\
-        w, h = parentTerm.getSize()\
-        resizeWindows()\
-        redrawMenu()\
-\
-    else\
-        -- Other event\
-        -- Passthrough to all processes\
-        local nLimit = #tProcesses -- Storing this ensures any new things spawned don't get the event\
-        for n = 1, nLimit do\
-            resumeProcess(n, table.unpack(tEventData, 1, tEventData.n))\
-        end\
-        if cullProcesses() then\
-            setMenuVisible(true)\
-            redrawMenu()\
-        end\
-    end\
-\
-    if bWindowsResized then\
-        -- Pass term_resize to all processes\
-        local nLimit = #tProcesses -- Storing this ensures any new things spawned don't get the event\
-        for n = 1, nLimit do\
-            resumeProcess(n, \"term_resize\")\
-        end\
-        bWindowsResized = false\
-        if cullProcesses() then\
-            setMenuVisible(true)\
-            redrawMenu()\
-        end\
-    end\
-end\
-\
--- Shutdown\
-sleep(0.5)\
-os.shutdown()\
-",
-  [ "mkdir.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-\
-if #tArgs < 1 then\
-    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usage: \" .. programName .. \" <paths>\")\
-    return\
-end\
-\
-for _, v in ipairs(tArgs) do\
-    local sNewDir = shell.resolve(v)\
-    if fs.exists(sNewDir) and not fs.isDir(sNewDir) then\
-        printError(v .. \": Destination exists\")\
-    elseif fs.isReadOnly(sNewDir) then\
-        printError(v .. \": Access denied\")\
-    else\
-        fs.makeDir(sNewDir)\
-    end\
-end\
-",
-  [ "screenfetch.lua" ] = "-- SPDX-FileCopyrightText: 2019 JackMacWindows\
---\
--- SPDX-License-Identifier: MIT\
-\
-if os.pullEvent ~= nil then\
-\
-    local ccart, ccart_fg, ccart_bg, ccart_adv_fg, ccart_adv_bg, ccart_width\
-\
-    if ... == \"--small\" then\
-\
-        ccart = ([[\\159\\143\\143\\143\\143\\143\\143\\143\\144\
-\\150\\136\\144     \\150\
-\\150\\130 \\131    \\150\
-\\150       \\150\
-\\150       \\150\
-\\150      \\140\\150\
-         ]]):gsub(\"\\\\130\", \"\\130\"):gsub(\"\\\\131\", \"\\131\"):gsub(\"\\\\136\", \"\\136\"):gsub(\"\\\\140\", \"\\140\"):gsub(\"\\\\143\", \"\\143\"):gsub(\"\\\\144\", \"\\144\"):gsub(\"\\\\150\", \"\\149\"):gsub(\"\\\\159\", \"\\159\")\
-\
-        ccart_fg = [[ffffffff7\
-f00fffff7\
-f0f0ffff7\
-ffffffff8\
-ffffffff8\
-f888888f8\
-fffffffff]]\
-\
-        ccart_bg = [[77777777f\
-7ffffffff\
-7ffffffff\
-8ffffffff\
-8ffffffff\
-88888888f\
-fffffffff]]\
-\
-        ccart_adv_fg = [[ffffffffb\
-f00fffffb\
-f0f0ffffb\
-ffffffffb\
-ffffffffb\
-f444444db\
-fffffffff]]\
-\
-        ccart_adv_bg = [[bbbbbbbbf\
-bffffffff\
-bffffffff\
-bffffffff\
-bffffffff\
-bbbbbbbbf\
-fffffffff]]\
-\
-        ccart_width = 10\
-\
-    else\
-        ccart = [[------------------------\
-|                      |\
-| -------------------- |\
-| | \\                | |\
-| | / __             | |\
-| |                  | |\
-| |                  | |\
-| |                  | |\
-| |                  | |\
-| |                  | |\
-| |                  | |\
-| -------------------- |\
-|                      |\
-|                  [=] |\
-|                      |\
-------------------------]]\
-\
-        ccart_fg = [[ffffffffffffffffffffffff\
-f7777777777777777777777f\
-f7ffffffffffffffffffff7f\
-f7ff0fffffffffffffffff7f\
-f7ff0f00ffffffffffffff7f\
-f7ffffffffffffffffffff7f\
-f7ffffffffffffffffffff7f\
-f7ffffffffffffffffffff7f\
-f8ffffffffffffffffffff8f\
-f8ffffffffffffffffffff8f\
-f8ffffffffffffffffffff8f\
-f8ffffffffffffffffffff8f\
-f8888888888888888888888f\
-f888888888888888888fff8f\
-f8888888888888888888888f\
-ffffffffffffffffffffffff]]\
-\
-        ccart_bg = [[ffffffffffffffffffffffff\
-f7777777777777777777777f\
-f7ffffffffffffffffffff7f\
-f7ffffffffffffffffffff7f\
-f7ffffffffffffffffffff7f\
-f7ffffffffffffffffffff7f\
-f7ffffffffffffffffffff7f\
-f7ffffffffffffffffffff7f\
-f8ffffffffffffffffffff8f\
-f8ffffffffffffffffffff8f\
-f8ffffffffffffffffffff8f\
-f8ffffffffffffffffffff8f\
-f8888888888888888888888f\
-f888888888888888888fff8f\
-f8888888888888888888888f\
-ffffffffffffffffffffffff]]\
-\
-        ccart_adv_fg = [[ffffffffffffffffffffffff\
-f4444444444444444444444f\
-f4ffffffffffffffffffff4f\
-f4ff0fffffffffffffffff4f\
-f4ff0f00ffffffffffffff4f\
-f4ffffffffffffffffffff4f\
-f4ffffffffffffffffffff4f\
-f4ffffffffffffffffffff4f\
-f4ffffffffffffffffffff4f\
-f4ffffffffffffffffffff4f\
-f4ffffffffffffffffffff4f\
-f4ffffffffffffffffffff4f\
-f4444444444444444444444f\
-f444444444444444444ddd4f\
-f4444444444444444444444f\
-ffffffffffffffffffffffff]]\
-\
-        ccart_adv_bg = [[ffffffffffffffffffffffff\
-fbbbbbbbbbbbbbbbbbbbbbbf\
-fbffffffffffffffffffffbf\
-fbffffffffffffffffffffbf\
-fbffffffffffffffffffffbf\
-fbffffffffffffffffffffbf\
-fbffffffffffffffffffffbf\
-fbffffffffffffffffffffbf\
-fbffffffffffffffffffffbf\
-fbffffffffffffffffffffbf\
-fbffffffffffffffffffffbf\
-fbffffffffffffffffffffbf\
-fbbbbbbbbbbbbbbbbbbbbbbf\
-fbbbbbbbbbbbbbbbbbbdddbf\
-fbbbbbbbbbbbbbbbbbbbbbbf\
-ffffffffffffffffffffffff]]\
-\
-        ccart_width = 25\
-\
-    end\
-\
-    local function fg(l) if term.isColor() then return string.rep(\"b\", l) else return string.rep(\"8\", l) end end\
-    local function text(title, str) return {title .. str, fg(string.len(title)) .. string.rep(\"0\", string.len(str)), string.rep(\"f\", string.len(title .. str))} end\
-\
-    local function time(n)\
-        local h = math.floor(n / 3600)\
-        local m = math.floor(n / 60) % 60\
-        local s = n % 60\
-        local retval = s .. \"s\"\
-        if m > 0 or h > 0 then retval = m .. \"m \" .. retval end\
-        if h > 0 then retval = h .. \"h \" .. retval end\
-        return retval\
-    end\
-\
-    local function ext(retval)\
-        if debug ~= nil then table.insert(retval, text(\"    \", \"Debug enabled\")) end\
-        if http ~= nil then table.insert(retval, text(\"    \", \"HTTP enabled\")) \
-        if http.websocket ~= nil then table.insert(retval, text(\"    \", \"CC: Tweaked\")) end end\
-        if mounter ~= nil then table.insert(retval, text(\"    \", \"CraftOS-PC\")) end\
-        if term.setGraphicsMode ~= nil then table.insert(retval, text(\"    \", \"CraftOS-PC GFX\")) end\
-        if term.screenshot ~= nil then table.insert(retval, text(\"    \", \"CraftOS-PC 2\")) end\
-        if ccemux ~= nil then table.insert(retval, text(\"    \", \"CCEmuX\")) end\
-        if fs.exists(\".mbs\") or fs.exists(\"rom/.mbs\") then table.insert(retval, text(\"    \", \"MBS\")) end\
-        if type(kernel) == \"table\" then table.insert(retval, text(\"    \", \"CCKernel2\")) end\
-        return retval\
-    end\
-\
-    local function getRuntime()\
-        if os.about ~= nil then return string.sub(os.about(), 1, string.find(os.about(), \"\\n\"))\
-        elseif ccemux ~= nil then return ccemux.getVersion()\
-        elseif _MC_VERSION ~= nil then return _MC_VERSION\
-        else return \"Unknown\" end\
-    end\
-\
-    local sysinfo = {\
-        text(os.getComputerLabel() or \"Untitled Computer\", \"\"),\
-        text(\"Type: \", commands ~= nil and \"Command Computer\" or term.isColor() and \"Advanced Computer\" or \"Standard Computer\"),\
-        text(\"OS: \", os.version()),\
-        text(\"Runtime: \", getRuntime()),\
-        text(\"Lua: \", _VERSION),\
-        text(\"Host: \", _HOST),\
-        text(\"Uptime: \", time(os.clock())),\
-        text(\"Extensions: \", \"\")\
-    }\
-    ext(sysinfo)\
-    local lines, sw, sh = 2, term.getSize()\
-    term.clear()\
-    term.setCursorPos(1, 2)\
-    for i = 1, string.len(ccart), ccart_width do \
-        term.blit(string.sub(ccart, i, i+ccart_width-2), string.sub(term.isColor() and ccart_adv_fg or ccart_fg, i, i+ccart_width-2), string.sub(term.isColor() and ccart_adv_bg or ccart_bg, i, i+ccart_width-2))\
-        write(\"  \")\
-        if sysinfo[((i-1)/ccart_width)+1] ~= nil then term.blit(table.unpack(sysinfo[((i-1)/ccart_width)+1])) end\
-        print(\"\")\
-        lines = lines + 1\
-    end\
-    for i = lines - 1, #sysinfo do\
-        write(string.rep(\" \", ccart_width + 1))\
-        term.blit(table.unpack(sysinfo[i]))\
-        print(\"\")\
-    end\
-    print(\"\")\
-    if term.screenshot ~= nil then term.screenshot() end\
-    sleep(0.25)\
-\
-else print(\"Unknown computer type\") end",
-  [ "useradd.lua" ] = "local tArgs = {...}\
-if module.config.users[module.currentUser][2] == 0 then\
-    write(\"password for \"..tArgs[1]..\": \")\
-    local pass = read(\"\")\
-    module.config.users[tArgs[1]] = {pass,1}\
-else\
-    print(\"useradd: must be ran as root\")\
-end",
-  [ "type.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-if #tArgs < 1 then\
-    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usage: \" .. programName .. \" <path>\")\
-    return\
-end\
-\
-local sPath = shell.resolve(tArgs[1])\
-if fs.exists(sPath) then\
-    if fs.isDir(sPath) then\
-        print(\"directory\")\
-    else\
-        print(\"file\")\
-    end\
-else\
-    print(\"No such path\")\
-end\
-",
-  [ "time.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local nTime = os.time()\
-local nDay = os.day()\
-print(\"The time is \" .. textutils.formatTime(nTime, false) .. \" on Day \" .. nDay)\
-",
-  [ "reboot.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-if term.isColour() then\
-    term.setTextColour(colours.blue)\
-end\
-print(\"Goodbye\")\
-term.setTextColour(colours.white)\
-\
-sleep(1)\
-os.reboot()\
-",
-  [ "shutdown.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-if term.isColour() then\
-    term.setTextColour(colours.blue)\
-end\
-print(\"Goodbye\")\
-term.setTextColour(colours.white)\
-\
-sleep(1)\
-os.shutdown()\
-",
-  [ "motd.lua" ] = "-- SPDX-FileCopyrightText: 2020 The CC: Tweaked Developers\
---\
--- SPDX-License-Identifier: MPL-2.0\
-\
-if _CCPC_FIRST_RUN then\
-    print([[Welcome to CraftOS-PC! This is the ComputerCraft shell prompt, where you can run programs.\
-* Type \"programs\" to see the programs you can run.\
-* Type \"help <program>\" to see help for a specific program.\
-* Read the documentation at https://www.craftos-pc.cc/docs/.\
-* Report bugs to https://www.craftos-pc.cc/bugreport.\
-]])\
-elseif _CCPC_UPDATED_VERSION then\
-    print(\"CraftOS-PC has been updated to \" .. _HOST:match(\"CraftOS%-PC [%a]* ?(v[%d%.]+)\") .. \". To see the new changes, type \\\"help whatsnew\\\".\")\
-else\
-    local date = os.date(\"*t\")\
-    if date.year == 2021 then\
-        print(\"Thank you SquidDev!\")\
-    elseif date.month == 1 and date.day == 1 then\
-        print(\"Happy new year!\")\
-    elseif date.month == 12 and date.day == 24 then\
-        print(\"Merry X-mas!\")\
-    elseif date.month == 10 and date.day == 31 then\
-        print(\"OOoooOOOoooo! Spooky!\")\
-    elseif date.month == 4 and date.day == 28 then\
-        print(\"Ed Balls\")\
-    elseif date.month == 9 and date.day == 8 then\
-        print(\"Happy birthday, CraftOS-PC!\")\
-    else\
-        local tMotd = {}\
-\
-        for sPath in string.gmatch(settings.get(\"motd.path\"), \"[^:]+\") do\
-            if fs.exists(sPath) then\
-                for sLine in io.lines(sPath) do\
-                    table.insert(tMotd, sLine)\
-                end\
-            end\
-        end\
-\
-        if mobile and mobile.purchasePlugin then\
-            table.insert(tMotd, \"Want to add more features to CraftOS-PC? Buy additional plugins using the plugins command.\")\
-        end\
-\
-        if #tMotd == 0 then\
-            print(\"missingno\")\
-        else\
-            print(tMotd[math.random(1, #tMotd)])\
-        end\
-    end\
-end\
-",
   [ "set.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
 --\
 -- SPDX-License-Identifier: LicenseRef-CCPL\
@@ -2906,520 +4537,24 @@ else\
     end\
 end\
 ",
-  [ "list.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+  [ "cd.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
 --\
 -- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-\
--- Get all the files in the directory\
-local sDir = shell.dir()\
-if tArgs[1] ~= nil then\
-    sDir = shell.resolve(tArgs[1])\
-end\
-\
-if not fs.isDir(sDir) then\
-    printError(\"Not a directory\")\
-    return\
-end\
-\
--- Sort into dirs/files, and calculate column count\
-local tAll = fs.list(sDir)\
-local tFiles = {}\
-local tDirs = {}\
-\
-local bShowHidden = settings.get(\"list.show_hidden\")\
-for _, sItem in pairs(tAll) do\
-    if bShowHidden or string.sub(sItem, 1, 1) ~= \".\" then\
-        local sPath = fs.combine(sDir, sItem)\
-        if fs.isDir(sPath) then\
-            table.insert(tDirs, sItem)\
-        else\
-            table.insert(tFiles, sItem)\
-        end\
-    end\
-end\
-table.sort(tDirs)\
-table.sort(tFiles)\
-\
-if term.isColour() then\
-    textutils.pagedTabulate(colors.green, tDirs, colors.white, tFiles)\
-else\
-    textutils.pagedTabulate(colors.lightGray, tDirs, colors.white, tFiles)\
-end\
-",
-  [ "lua.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-if #tArgs > 0 then\
-    print(\"This is an interactive Lua prompt.\")\
-    print(\"To run a lua program, just type its name.\")\
-    return\
-end\
-\
-local pretty = require and require \"cc.pretty\" or dofile \"/rom/modules/main/cc/expect.lua\"\
-local exception = require and require \"cc.internal.exception\" or dofile \"/rom/modules/main/cc/internal/exception.lua\"\
-\
-local running = true\
-local tCommandHistory = {}\
-local tEnv = {\
-    [\"exit\"] = setmetatable({}, {\
-        __tostring = function() return \"Call exit() to exit.\" end,\
-        __call = function() running = false end,\
-    }),\
-    [\"_echo\"] = function(...)\
-        return ...\
-    end,\
-}\
-setmetatable(tEnv, { __index = _ENV })\
-\
--- Replace our require with new instance that loads from the current directory\
--- rather than from /rom/programs. This makes it more friendly to use and closer\
--- to what you'd expect.\
-if shell then\
-    local make_package = require \"cc.require\".make\
-    local dir = shell.dir()\
-    _ENV.require, _ENV.package = make_package(_ENV, dir)\
-end\
-\
-if term.isColour() then\
-    term.setTextColour(colours.blue)\
-end\
-print(_G._CCPC_DEBUGGER_ACTIVE and \"Entering debugger.\" or \"Interactive Lua prompt.\")\
-print(\"Call exit() to exit.\")\
-term.setTextColour(colours.white)\
-\
-local chunk_idx, chunk_map = 1, {}\
-while running do\
-    --if term.isColour() then\
-    --    term.setTextColour( colours.yellow )\
-    --end\
-    write(_G._CCPC_DEBUGGER_ACTIVE and \"lua_debug> \" or \"lua> \")\
-    --term.setTextColour( colours.white )\
-\
-    local input = read(nil, tCommandHistory, function(sLine)\
-        if settings.get(\"lua.autocomplete\") then\
-            local nStartPos = string.find(sLine, \"[a-zA-Z0-9_%.:]+$\")\
-            if nStartPos then\
-                sLine = string.sub(sLine, nStartPos)\
-            end\
-            if #sLine > 0 then\
-                return textutils.complete(sLine, tEnv)\
-            end\
-        end\
-        return nil\
-    end)\
-    if input:match(\"%S\") and tCommandHistory[#tCommandHistory] ~= input then\
-        table.insert(tCommandHistory, input)\
-    end\
-    if settings.get(\"lua.warn_against_use_of_local\") and input:match(\"^%s*local%s+\") then\
-        if term.isColour() then\
-            term.setTextColour(colours.yellow)\
-        end\
-       print(\"To access local variables in later inputs, remove the local keyword.\")\
-       term.setTextColour(colours.white)\
-    end\
-\
-    local name, offset = \"=lua[\" .. chunk_idx .. \"]\", 0\
-\
-    local func, err = load(input, name, \"t\", tEnv)\
-    if load(\"return \" .. input) then\
-        -- We wrap the expression with a call to _echo(...), which prevents tail\
-        -- calls (and thus confusing errors). Note we check this is a valid\
-        -- expression separately, to avoid accepting inputs like `)--` (which are\
-        -- parsed as `_echo()--)`.\
-        func = load(\"return _echo(\" .. input .. \"\\n)\", name, \"t\", tEnv)\
-        offset = 13\
-    end\
-\
-    if func then\
-        chunk_map[name] = { contents = input, offset = offset }\
-        chunk_idx = chunk_idx + 1\
-\
-        local results = table.pack(exception.try(func))\
-        if results[1] then\
-            for i = 2, results.n do\
-                local value = results[i]\
-                local ok, serialised = pcall(pretty.pretty, value, {\
-                    function_args = settings.get(\"lua.function_args\"),\
-                    function_source = settings.get(\"lua.function_source\"),\
-                })\
-                if ok then\
-                    pretty.print(serialised)\
-                else\
-                    print(tostring(value))\
-                end\
-            end\
-        else\
-            printError(results[2])\
-            require \"cc.internal.exception\".report(results[2], results[3], chunk_map)\
-        end\
-    else\
-        local parser = require \"cc.internal.syntax\"\
-        if parser.parse_repl(input) then printError(err) end\
-    end\
-\
-end\
-",
-  [ "fg.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-if not shell.openTab then\
-    printError(\"Requires multishell\")\
-    return\
-end\
-\
-local tArgs = { ... }\
-if #tArgs > 0 then\
-    local nTask = shell.openTab(table.unpack(tArgs))\
-    if nTask then\
-        shell.switchTab(nTask)\
-    end\
-else\
-    local nTask = shell.openTab(\"shell\")\
-    if nTask then\
-        shell.switchTab(nTask)\
-    end\
-end\
-",
-  [ "rename.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-if #tArgs < 2 then\
-    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usage: \" .. programName .. \" <source> <destination>\")\
-    return\
-end\
-\
-local sSource = shell.resolve(tArgs[1])\
-local sDest = shell.resolve(tArgs[2])\
-\
-if not fs.exists(sSource) then\
-    printError(\"No matching files\")\
-    return\
-elseif fs.isDriveRoot(sSource) then\
-    printError(\"Can't rename mounts\")\
-    return\
-elseif fs.isReadOnly(sSource) then\
-    printError(\"Source is read-only\")\
-    return\
-elseif fs.exists(sDest) then\
-    printError(\"Destination exists\")\
-    return\
-elseif fs.isReadOnly(sDest) then\
-    printError(\"Destination is read-only\")\
-    return\
-end\
-\
-fs.move(sSource, sDest)\
-",
-  [ "redstone.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-\
-local function printUsage()\
-    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usages:\")\
-    print(programName .. \" probe\")\
-    print(programName .. \" set <side> <value>\")\
-    print(programName .. \" set <side> <color> <value>\")\
-    print(programName .. \" pulse <side> <count> <period>\")\
-end\
-\
-local sCommand = tArgs[1]\
-if sCommand == \"probe\" then\
-    -- \"redstone probe\"\
-    -- Regular input\
-    print(\"Redstone inputs: \")\
-\
-    local count = 0\
-    local bundledCount = 0\
-    for _, sSide in ipairs(redstone.getSides()) do\
-        if redstone.getBundledInput(sSide) > 0 then\
-            bundledCount = bundledCount + 1\
-        end\
-        if redstone.getInput(sSide) then\
-            if count > 0 then\
-                io.write(\", \")\
-            end\
-            io.write(sSide)\
-            count = count + 1\
-        end\
-    end\
-    if count > 0 then\
-        print(\".\")\
-    else\
-        print(\"None.\")\
-    end\
-\
-    -- Bundled input\
-    if bundledCount > 0 then\
-        print()\
-        print(\"Bundled inputs:\")\
-        for _, sSide in ipairs(redstone.getSides()) do\
-            local nInput = redstone.getBundledInput(sSide)\
-            if nInput ~= 0 then\
-                write(sSide .. \": \")\
-                local count = 0\
-                for sColour, nColour in pairs(colors) do\
-                    if type(nColour) == \"number\" and colors.test(nInput, nColour) then\
-                        if count > 0 then\
-                            write(\", \")\
-                        end\
-                        if term.isColour() then\
-                            term.setTextColour(nColour)\
-                        end\
-                        write(sColour)\
-                        if term.isColour() then\
-                            term.setTextColour(colours.white)\
-                        end\
-                        count = count + 1\
-                    end\
-                end\
-                print(\".\")\
-            end\
-        end\
-    end\
-\
-elseif sCommand == \"pulse\" then\
-    -- \"redstone pulse\"\
-    local sSide = tArgs[2]\
-    local nCount = tonumber(tArgs[3]) or 1\
-    local nPeriod = tonumber(tArgs[4]) or 0.5\
-    for _ = 1, nCount do\
-        redstone.setOutput(sSide, true)\
-        sleep(nPeriod / 2)\
-        redstone.setOutput(sSide, false)\
-        sleep(nPeriod / 2)\
-    end\
-\
-elseif sCommand == \"set\" then\
-    -- \"redstone set\"\
-    local sSide = tArgs[2]\
-    if #tArgs > 3 then\
-        -- Bundled cable output\
-        local sColour = tArgs[3]\
-        local nColour = colors[sColour] or colours[sColour]\
-        if type(nColour) ~= \"number\" then\
-            printError(\"No such color\")\
-            return\
-        end\
-\
-        local sValue = tArgs[4]\
-        if sValue == \"true\" then\
-            rs.setBundledOutput(sSide, colors.combine(rs.getBundledOutput(sSide), nColour))\
-        elseif sValue == \"false\" then\
-            rs.setBundledOutput(sSide, colors.subtract(rs.getBundledOutput(sSide), nColour))\
-        else\
-            print(\"Value must be boolean\")\
-        end\
-    else\
-        -- Regular output\
-        local sValue = tArgs[3]\
-        local nValue = tonumber(sValue)\
-        if sValue == \"true\" then\
-            rs.setOutput(sSide, true)\
-        elseif sValue == \"false\" then\
-            rs.setOutput(sSide, false)\
-        elseif nValue and nValue >= 0 and nValue <= 15 then\
-            rs.setAnalogOutput(sSide, nValue)\
-        else\
-            print(\"Value must be boolean or 0-15\")\
-        end\
-    end\
-\
-else\
-    -- Something else\
-    printUsage()\
-\
-end\
-",
-  [ "copy.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-if #tArgs < 2 then\
-    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usage: \" .. programName .. \" <source> <destination>\")\
-    return\
-end\
-\
-local sSource = shell.resolve(tArgs[1])\
-local sDest = shell.resolve(tArgs[2])\
-local tFiles = fs.find(sSource)\
-if #tFiles > 0 then\
-    for _, sFile in ipairs(tFiles) do\
-        if fs.isDir(sDest) then\
-            fs.copy(sFile, fs.combine(sDest, fs.getName(sFile)))\
-        elseif #tFiles == 1 then\
-            if fs.exists(sDest) then\
-                 printError(\"Destination exists\")\
-            elseif fs.isReadOnly(sDest) then\
-                printError(\"Destination is read-only\")\
-            elseif fs.getFreeSpace(sDest) < fs.getSize(sFile) then\
-                printError(\"Not enough space\")\
-            else\
-                 fs.copy(sFile, sDest)\
-            end\
-        else\
-            printError(\"Cannot overwrite file multiple times\")\
-            return\
-        end\
-    end\
-else\
-    printError(\"No matching files\")\
-end\
-",
-  [ "programs.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local bAll = false\
-local tArgs = { ... }\
-if #tArgs > 0 and tArgs[1] == \"all\" then\
-    bAll = true\
-end\
-\
-local tPrograms = shell.programs(bAll)\
-textutils.pagedTabulate(tPrograms)\
-",
-  [ "about.lua" ] = "-- SPDX-FileCopyrightText: 2021 The CC: Tweaked Developers\
---\
--- SPDX-License-Identifier: MPL-2.0\
-\
--- Prints information about CraftOS\
-term.setTextColor(colors.yellow)\
-print(os.version() .. \" on \" .. _HOST)\
-term.setTextColor(colors.white)",
-  [ "gps.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local function printUsage()\
-    local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usages:\")\
-    print(programName .. \" host\")\
-    print(programName .. \" host <x> <y> <z>\")\
-    print(programName .. \" locate\")\
-end\
 \
 local tArgs = { ... }\
 if #tArgs < 1 then\
-    printUsage()\
-    return\
-end\
-\
- local sCommand = tArgs[1]\
-if sCommand == \"locate\" then\
-    -- \"gps locate\"\
-    -- Just locate this computer (this will print the results)\
-    gps.locate(2, true)\
-\
-elseif sCommand == \"host\" then\
-    -- \"gps host\"\
-    -- Act as a GPS host\
-    if pocket then\
-        print(\"GPS Hosts must be stationary\")\
-        return\
-    end\
-\
-    -- Find a modem\
-    local sModemSide = nil\
-    for _, sSide in ipairs(rs.getSides()) do\
-        if peripheral.getType(sSide) == \"modem\" and peripheral.call(sSide, \"isWireless\") then\
-            sModemSide = sSide\
-            break\
-        end\
-    end\
-\
-    if sModemSide == nil then\
-        print(\"No wireless modems found. 1 required.\")\
-        return\
-    end\
-\
-    -- Determine position\
-    local x, y, z\
-    if #tArgs >= 4 then\
-        -- Position is manually specified\
-        x = tonumber(tArgs[2])\
-        y = tonumber(tArgs[3])\
-        z = tonumber(tArgs[4])\
-        if x == nil or y == nil or z == nil then\
-            printUsage()\
-            return\
-        end\
-        print(\"Position is \" .. x .. \",\" .. y .. \",\" .. z)\
-    else\
-        -- Position is to be determined using locate\
-        x, y, z = gps.locate(2, true)\
-        if x == nil then\
-            print(\"Run \\\"gps host <x> <y> <z>\\\" to set position manually\")\
-            return\
-        end\
-    end\
-\
-    -- Open a channel\
-    local modem = peripheral.wrap(sModemSide)\
-    print(\"Opening channel on modem \" .. sModemSide)\
-    modem.open(gps.CHANNEL_GPS)\
-\
-    -- Serve requests indefinately\
-    local nServed = 0\
-    while true do\
-        local e, p1, p2, p3, p4, p5 = os.pullEvent(\"modem_message\")\
-        if e == \"modem_message\" then\
-            -- We received a message from a modem\
-            local sSide, sChannel, sReplyChannel, sMessage, nDistance = p1, p2, p3, p4, p5\
-            if sSide == sModemSide and sChannel == gps.CHANNEL_GPS and sMessage == \"PING\" and nDistance then\
-                -- We received a ping message on the GPS channel, send a response\
-                modem.transmit(sReplyChannel, gps.CHANNEL_GPS, { x, y, z })\
-\
-                -- Print the number of requests handled\
-                nServed = nServed + 1\
-                if nServed > 1 then\
-                    local _, y = term.getCursorPos()\
-                    term.setCursorPos(1, y - 1)\
-                end\
-                print(nServed .. \" GPS requests served\")\
-            end\
-        end\
-    end\
-else\
-    -- \"gps somethingelse\"\
-    -- Error\
-    printUsage()\
-end\
-",
-  [ "eject.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
--- Get arguments\
-local tArgs = { ... }\
-if #tArgs == 0 then\
     local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usage: \" .. programName .. \" <drive>\")\
+    print(\"Usage: \" .. programName .. \" <path>\")\
     return\
 end\
 \
-local sDrive = tArgs[1]\
-\
--- Check the disk exists\
-local bPresent = disk.isPresent(sDrive)\
-if not bPresent then\
-    print(\"Nothing in \" .. sDrive .. \" drive\")\
+local sNewDir = shell.resolve(tArgs[1])\
+if fs.isDir(sNewDir) then\
+    shell.setDir(sNewDir)\
+else\
+    print(\"Not a directory\")\
     return\
 end\
-\
-disk.eject(sDrive)\
 ",
   [ "clear.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
 --\
@@ -3470,1171 +4605,37 @@ else\
     printUsage()\
 end\
 ",
-  [ "edit.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
+  [ "rename.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
 --\
 -- SPDX-License-Identifier: LicenseRef-CCPL\
 \
--- Get file to edit\
 local tArgs = { ... }\
-if #tArgs == 0 then\
+if #tArgs < 2 then\
     local programName = arg[0] or fs.getName(shell.getRunningProgram())\
-    print(\"Usage: \" .. programName .. \" <path>\")\
+    print(\"Usage: \" .. programName .. \" <source> <destination>\")\
     return\
 end\
 \
--- Error checking\
-local sPath = shell.resolve(tArgs[1])\
-local bReadOnly = fs.isReadOnly(sPath)\
-if fs.exists(sPath) and fs.isDir(sPath) then\
-    print(\"Cannot edit a directory.\")\
+local sSource = shell.resolve(tArgs[1])\
+local sDest = shell.resolve(tArgs[2])\
+\
+if not fs.exists(sSource) then\
+    printError(\"No matching files\")\
+    return\
+elseif fs.isDriveRoot(sSource) then\
+    printError(\"Can't rename mounts\")\
+    return\
+elseif fs.isReadOnly(sSource) then\
+    printError(\"Source is read-only\")\
+    return\
+elseif fs.exists(sDest) then\
+    printError(\"Destination exists\")\
+    return\
+elseif fs.isReadOnly(sDest) then\
+    printError(\"Destination is read-only\")\
     return\
 end\
 \
--- Create .lua files by default\
-if not fs.exists(sPath) and not string.find(sPath, \"%.\") then\
-    local sExtension = settings.get(\"edit.default_extension\")\
-    if sExtension ~= \"\" and type(sExtension) == \"string\" then\
-        sPath = sPath .. \".\" .. sExtension\
-    end\
-end\
-\
-local x, y = 1, 1\
-local w, h = term.getSize()\
-local scrollX, scrollY = 0, 0\
-\
-local tLines = {}\
-local bRunning = true\
-\
--- Colours\
-local highlightColour, keywordColour, commentColour, textColour, bgColour, stringColour, errorColour\
-if term.isColour() then\
-    bgColour = colours.black\
-    textColour = colours.white\
-    highlightColour = colours.blue\
-    keywordColour = colours.blue\
-    commentColour = colours.green\
-    stringColour = colours.red\
-    errorColour = colours.red\
-else\
-    bgColour = colours.black\
-    textColour = colours.white\
-    highlightColour = colours.white\
-    keywordColour = colours.white\
-    commentColour = colours.white\
-    stringColour = colours.white\
-    errorColour = colours.white\
-end\
-\
-local runHandler = [[multishell.setTitle(multishell.getCurrent(), %q)\
-local current = term.current()\
-local contents, name = %q, %q\
-local fn, err = load(contents, name, nil, _ENV)\
-if fn then\
-    local exception = require \"cc.internal.exception\"\
-    local ok, err, co = exception.try(fn, ...)\
-\
-    term.redirect(current)\
-    term.setTextColor(term.isColour() and colours.yellow or colours.white)\
-    term.setBackgroundColor(colours.black)\
-    term.setCursorBlink(false)\
-\
-    if not ok then\
-        printError(err)\
-        exception.report(err, co, { [name] = contents })\
-    end\
-else\
-    local parser = require \"cc.internal.syntax\"\
-    if parser.parse_program(contents) then printError(err) end\
-end\
-\
-local message = \"Press any key to continue.\"\
-if ok then message = \"Program finished. \" .. message end\
-local _, y = term.getCursorPos()\
-local w, h = term.getSize()\
-local wrapped = require(\"cc.strings\").wrap(message, w)\
-\
-local start_y = h - #wrapped + 1\
-if y >= start_y then term.scroll(y - start_y + 1) end\
-for i = 1, #wrapped do\
-    term.setCursorPos(1, start_y + i - 1)\
-    term.write(wrapped[i])\
-end\
-os.pullEvent('key')\
-require \"cc.internal.event\".discard_char()\
-]]\
-\
--- Menus\
-local bMenu = false\
-local nMenuItem = 1\
-local tMenuItems = {}\
-if not bReadOnly then\
-    table.insert(tMenuItems, \"Save\")\
-end\
-if shell.openTab then\
-    table.insert(tMenuItems, \"Run\")\
-end\
-if peripheral.find(\"printer\") then\
-    table.insert(tMenuItems, \"Print\")\
-end\
-table.insert(tMenuItems, \"Exit\")\
-\
-local status_ok, status_text\
-local function set_status(text, ok)\
-    status_ok = ok ~= false\
-    status_text = text\
-end\
-\
-if not bReadOnly and fs.getFreeSpace(sPath) < 1024 then\
-    set_status(\"Disk is low on space\", false)\
-else\
-    local message\
-    if term.isColour() then\
-        message = \"Press Ctrl or click here to access menu\"\
-    else\
-        message = \"Press Ctrl to access menu\"\
-    end\
-\
-    if #message > w - 5 then\
-        message = \"Press Ctrl for menu\"\
-    end\
-\
-    set_status(message)\
-end\
-\
-local function load(_sPath)\
-    tLines = {}\
-    if fs.exists(_sPath) then\
-        local file = io.open(_sPath, \"r\")\
-        local sLine = file:read()\
-        while sLine do\
-            table.insert(tLines, sLine)\
-            sLine = file:read()\
-        end\
-        file:close()\
-    end\
-\
-    if #tLines == 0 then\
-        table.insert(tLines, \"\")\
-    end\
-end\
-\
-local function save(_sPath, fWrite)\
-    -- Create intervening folder\
-    local sDir = _sPath:sub(1, _sPath:len() - fs.getName(_sPath):len())\
-    if not fs.exists(sDir) then\
-        fs.makeDir(sDir)\
-    end\
-\
-    -- Save\
-    local file, fileerr\
-    local function innerSave()\
-        file, fileerr = fs.open(_sPath, \"w\")\
-        if file then\
-            if file then\
-                fWrite(file)\
-            end\
-        else\
-            error(\"Failed to open \" .. _sPath)\
-        end\
-    end\
-\
-    local ok, err = pcall(innerSave)\
-    if file then\
-        file.close()\
-    end\
-    return ok, err, fileerr\
-end\
-\
-local tKeywords = {\
-    [\"and\"] = true,\
-    [\"break\"] = true,\
-    [\"do\"] = true,\
-    [\"else\"] = true,\
-    [\"elseif\"] = true,\
-    [\"end\"] = true,\
-    [\"false\"] = true,\
-    [\"for\"] = true,\
-    [\"function\"] = true,\
-    [\"if\"] = true,\
-    [\"in\"] = true,\
-    [\"local\"] = true,\
-    [\"nil\"] = true,\
-    [\"not\"] = true,\
-    [\"or\"] = true,\
-    [\"repeat\"] = true,\
-    [\"return\"] = true,\
-    [\"then\"] = true,\
-    [\"true\"] = true,\
-    [\"until\"] = true,\
-    [\"while\"] = true,\
-}\
-\
-local function tryWrite(sLine, regex, colour)\
-    local match = string.match(sLine, regex)\
-    if match then\
-        if type(colour) == \"number\" then\
-            term.setTextColour(colour)\
-        else\
-            term.setTextColour(colour(match))\
-        end\
-        term.write(match)\
-        term.setTextColour(textColour)\
-        return string.sub(sLine, #match + 1)\
-    end\
-    return nil\
-end\
-\
-local function writeHighlighted(sLine)\
-    while #sLine > 0 do\
-        sLine =\
-            tryWrite(sLine, \"^%-%-%[%[.-%]%]\", commentColour) or\
-            tryWrite(sLine, \"^%-%-.*\", commentColour) or\
-            tryWrite(sLine, \"^\\\"\\\"\", stringColour) or\
-            tryWrite(sLine, \"^\\\".-[^\\\\]\\\"\", stringColour) or\
-            tryWrite(sLine, \"^\\'\\'\", stringColour) or\
-            tryWrite(sLine, \"^\\'.-[^\\\\]\\'\", stringColour) or\
-            tryWrite(sLine, \"^%[%[.-%]%]\", stringColour) or\
-            tryWrite(sLine, \"^[%w_]+\", function(match)\
-                if tKeywords[match] then\
-                    return keywordColour\
-                end\
-                return textColour\
-            end) or\
-            tryWrite(sLine, \"^[^%w_]\", textColour)\
-    end\
-end\
-\
-local tCompletions\
-local nCompletion\
-\
-local tCompleteEnv = _ENV\
-local function complete(sLine)\
-    if settings.get(\"edit.autocomplete\") then\
-        local nStartPos = string.find(sLine, \"[a-zA-Z0-9_%.:]+$\")\
-        if nStartPos then\
-            sLine = string.sub(sLine, nStartPos)\
-        end\
-        if #sLine > 0 then\
-            return textutils.complete(sLine, tCompleteEnv)\
-        end\
-    end\
-    return nil\
-end\
-\
-local function recomplete()\
-    local sLine = tLines[y]\
-    if not bMenu and not bReadOnly and x == #sLine + 1 then\
-        tCompletions = complete(sLine)\
-        if tCompletions and #tCompletions > 0 then\
-            nCompletion = 1\
-        else\
-            nCompletion = nil\
-        end\
-    else\
-        tCompletions = nil\
-        nCompletion = nil\
-    end\
-end\
-\
-local function writeCompletion(sLine)\
-    if nCompletion then\
-        local sCompletion = tCompletions[nCompletion]\
-        term.setTextColor(colours.white)\
-        term.setBackgroundColor(colours.grey)\
-        term.write(sCompletion)\
-        term.setTextColor(textColour)\
-        term.setBackgroundColor(bgColour)\
-    end\
-end\
-\
-local function redrawText()\
-    local cursorX, cursorY = x, y\
-    for y = 1, h - 1 do\
-        term.setCursorPos(1 - scrollX, y)\
-        term.clearLine()\
-\
-        local sLine = tLines[y + scrollY]\
-        if sLine ~= nil then\
-            writeHighlighted(sLine)\
-            if cursorY == y and cursorX == #sLine + 1 then\
-                writeCompletion()\
-            end\
-        end\
-    end\
-    term.setCursorPos(x - scrollX, y - scrollY)\
-end\
-\
-local function redrawLine(_nY)\
-    local sLine = tLines[_nY]\
-    if sLine then\
-        term.setCursorPos(1 - scrollX, _nY - scrollY)\
-        term.clearLine()\
-        writeHighlighted(sLine)\
-        if _nY == y and x == #sLine + 1 then\
-            writeCompletion()\
-        end\
-        term.setCursorPos(x - scrollX, _nY - scrollY)\
-    end\
-end\
-\
-local function redrawMenu()\
-    -- Clear line\
-    term.setCursorPos(1, h)\
-    term.clearLine()\
-\
-    -- Draw line numbers\
-    term.setCursorPos(w - #(\"Ln \" .. y) + 1, h)\
-    term.setTextColour(highlightColour)\
-    term.write(\"Ln \")\
-    term.setTextColour(textColour)\
-    term.write(y)\
-\
-    term.setCursorPos(1, h)\
-    if bMenu then\
-        -- Draw menu\
-        term.setTextColour(textColour)\
-        for nItem, sItem in pairs(tMenuItems) do\
-            if nItem == nMenuItem then\
-                term.setTextColour(highlightColour)\
-                term.write(\"[\")\
-                term.setTextColour(textColour)\
-                term.write(sItem)\
-                term.setTextColour(highlightColour)\
-                term.write(\"]\")\
-                term.setTextColour(textColour)\
-            else\
-                term.write(\" \" .. sItem .. \" \")\
-            end\
-        end\
-    else\
-        -- Draw status\
-        term.setTextColour(status_ok and highlightColour or errorColour)\
-        term.write(status_text)\
-        term.setTextColour(textColour)\
-    end\
-\
-    -- Reset cursor\
-    term.setCursorPos(x - scrollX, y - scrollY)\
-end\
-\
-local tMenuFuncs = {\
-    Save = function()\
-        if bReadOnly then\
-            set_status(\"Access denied\", false)\
-        else\
-            local ok, _, fileerr  = save(sPath, function(file)\
-                for _, sLine in ipairs(tLines) do\
-                    file.write(sLine .. \"\\n\")\
-                end\
-            end)\
-            if ok then\
-                set_status(\"Saved to \" .. sPath)\
-            else\
-                if fileerr then\
-                    set_status(\"Error saving: \" .. fileerr, false)\
-                else\
-                    set_status(\"Error saving to \" .. sPath, false)\
-                end\
-            end\
-        end\
-        redrawMenu()\
-    end,\
-    Print = function()\
-        local printer = peripheral.find(\"printer\")\
-        if not printer then\
-            set_status(\"No printer attached\", false)\
-            return\
-        end\
-\
-        local nPage = 0\
-        local sName = fs.getName(sPath)\
-        if printer.getInkLevel() < 1 then\
-            set_status(\"Printer out of ink\", false)\
-            return\
-        elseif printer.getPaperLevel() < 1 then\
-            set_status(\"Printer out of paper\", false)\
-            return\
-        end\
-\
-        local screenTerminal = term.current()\
-        local printerTerminal = {\
-            getCursorPos = printer.getCursorPos,\
-            setCursorPos = printer.setCursorPos,\
-            getSize = printer.getPageSize,\
-            write = printer.write,\
-        }\
-        printerTerminal.scroll = function()\
-            if nPage == 1 then\
-                printer.setPageTitle(sName .. \" (page \" .. nPage .. \")\")\
-            end\
-\
-            while not printer.newPage() do\
-                if printer.getInkLevel() < 1 then\
-                    set_status(\"Printer out of ink, please refill\", false)\
-                elseif printer.getPaperLevel() < 1 then\
-                    set_status(\"Printer out of paper, please refill\", false)\
-                else\
-                    set_status(\"Printer output tray full, please empty\", false)\
-                end\
-\
-                term.redirect(screenTerminal)\
-                redrawMenu()\
-                term.redirect(printerTerminal)\
-\
-                sleep(0.5)\
-            end\
-\
-            nPage = nPage + 1\
-            if nPage == 1 then\
-                printer.setPageTitle(sName)\
-            else\
-                printer.setPageTitle(sName .. \" (page \" .. nPage .. \")\")\
-            end\
-        end\
-\
-        bMenu = false\
-        term.redirect(printerTerminal)\
-        local ok, error = pcall(function()\
-            term.scroll()\
-            for _, sLine in ipairs(tLines) do\
-                print(sLine)\
-            end\
-        end)\
-        term.redirect(screenTerminal)\
-        if not ok then\
-            print(error)\
-        end\
-\
-        while not printer.endPage() do\
-            set_status(\"Printer output tray full, please empty\")\
-            redrawMenu()\
-            sleep(0.5)\
-        end\
-        bMenu = true\
-\
-        if nPage > 1 then\
-            set_status(\"Printed \" .. nPage .. \" Pages\")\
-        else\
-            set_status(\"Printed 1 Page\")\
-        end\
-        redrawMenu()\
-    end,\
-    Exit = function()\
-        bRunning = false\
-    end,\
-    Run = function()\
-        local sTitle = fs.getName(sPath)\
-        if sTitle:sub(-4) == \".lua\" then\
-            sTitle = sTitle:sub(1, -5)\
-        end\
-        local sTempPath = bReadOnly and \".temp.\" .. sTitle or fs.combine(fs.getDir(sPath), \".temp.\" .. sTitle)\
-        if fs.exists(sTempPath) then\
-            set_status(\"Error saving to \" .. sTempPath, false)\
-            return\
-        end\
-        local ok = save(sTempPath, function(file)\
-            file.write(runHandler:format(sTitle, table.concat(tLines, \"\\n\"), \"@/\" .. sPath))\
-        end)\
-        if ok then\
-            local nTask = shell.openTab(\"/\" .. sTempPath)\
-            if nTask then\
-                shell.switchTab(nTask)\
-            else\
-                set_status(\"Error starting Task\", false)\
-            end\
-            fs.delete(sTempPath)\
-        else\
-            set_status(\"Error saving to \" .. sTempPath, false)\
-        end\
-        redrawMenu()\
-    end,\
-}\
-\
-local function doMenuItem(_n)\
-    tMenuFuncs[tMenuItems[_n]]()\
-    if bMenu then\
-        bMenu = false\
-        term.setCursorBlink(true)\
-    end\
-    redrawMenu()\
-end\
-\
-local function setCursor(newX, newY)\
-    local _, oldY = x, y\
-    x, y = newX, newY\
-    local screenX = x - scrollX\
-    local screenY = y - scrollY\
-\
-    local bRedraw = false\
-    if screenX < 1 then\
-        scrollX = x - 1\
-        screenX = 1\
-        bRedraw = true\
-    elseif screenX > w then\
-        scrollX = x - w\
-        screenX = w\
-        bRedraw = true\
-    end\
-\
-    if screenY < 1 then\
-        scrollY = y - 1\
-        screenY = 1\
-        bRedraw = true\
-    elseif screenY > h - 1 then\
-        scrollY = y - (h - 1)\
-        screenY = h - 1\
-        bRedraw = true\
-    end\
-\
-    recomplete()\
-    if bRedraw then\
-        redrawText()\
-    elseif y ~= oldY then\
-        redrawLine(oldY)\
-        redrawLine(y)\
-    else\
-        redrawLine(y)\
-    end\
-    term.setCursorPos(screenX, screenY)\
-\
-    redrawMenu()\
-end\
-\
--- Actual program functionality begins\
-load(sPath)\
-\
-term.setBackgroundColour(bgColour)\
-term.clear()\
-term.setCursorPos(x, y)\
-term.setCursorBlink(true)\
-\
-recomplete()\
-redrawText()\
-redrawMenu()\
-\
-local function acceptCompletion()\
-    if nCompletion then\
-        -- Append the completion\
-        local sCompletion = tCompletions[nCompletion]\
-        tLines[y] = tLines[y] .. sCompletion\
-        setCursor(x + #sCompletion , y)\
-    end\
-end\
-\
--- Handle input\
-while bRunning do\
-    local sEvent, param, param2, param3 = os.pullEvent()\
-    if sEvent == \"key\" then\
-        if param == keys.up then\
-            -- Up\
-            if not bMenu then\
-                if nCompletion then\
-                    -- Cycle completions\
-                    nCompletion = nCompletion - 1\
-                    if nCompletion < 1 then\
-                        nCompletion = #tCompletions\
-                    end\
-                    redrawLine(y)\
-\
-                elseif y > 1 then\
-                    -- Move cursor up\
-                    setCursor(\
-                        math.min(x, #tLines[y - 1] + 1),\
-                        y - 1\
-                    )\
-                end\
-            end\
-\
-        elseif param == keys.down then\
-            -- Down\
-            if not bMenu then\
-                -- Move cursor down\
-                if nCompletion then\
-                    -- Cycle completions\
-                    nCompletion = nCompletion + 1\
-                    if nCompletion > #tCompletions then\
-                        nCompletion = 1\
-                    end\
-                    redrawLine(y)\
-\
-                elseif y < #tLines then\
-                    -- Move cursor down\
-                    setCursor(\
-                        math.min(x, #tLines[y + 1] + 1),\
-                        y + 1\
-                    )\
-                end\
-            end\
-\
-        elseif param == keys.tab then\
-            -- Tab\
-            if not bMenu and not bReadOnly then\
-                if nCompletion and x == #tLines[y] + 1 then\
-                    -- Accept autocomplete\
-                    acceptCompletion()\
-                else\
-                    -- Indent line\
-                    local sLine = tLines[y]\
-                    tLines[y] = string.sub(sLine, 1, x - 1) .. \"    \" .. string.sub(sLine, x)\
-                    setCursor(x + 4, y)\
-                end\
-            end\
-\
-        elseif param == keys.pageUp then\
-            -- Page Up\
-            if not bMenu then\
-                -- Move up a page\
-                local newY\
-                if y - (h - 1) >= 1 then\
-                    newY = y - (h - 1)\
-                else\
-                    newY = 1\
-                end\
-                setCursor(\
-                    math.min(x, #tLines[newY] + 1),\
-                    newY\
-                )\
-            end\
-\
-        elseif param == keys.pageDown then\
-            -- Page Down\
-            if not bMenu then\
-                -- Move down a page\
-                local newY\
-                if y + (h - 1) <= #tLines then\
-                    newY = y + (h - 1)\
-                else\
-                    newY = #tLines\
-                end\
-                local newX = math.min(x, #tLines[newY] + 1)\
-                setCursor(newX, newY)\
-            end\
-\
-        elseif param == keys.home then\
-            -- Home\
-            if not bMenu then\
-                -- Move cursor to the beginning\
-                if x > 1 then\
-                    setCursor(1, y)\
-                end\
-            end\
-\
-        elseif param == keys[\"end\"] then\
-            -- End\
-            if not bMenu then\
-                -- Move cursor to the end\
-                local nLimit = #tLines[y] + 1\
-                if x < nLimit then\
-                    setCursor(nLimit, y)\
-                end\
-            end\
-\
-        elseif param == keys.left then\
-            -- Left\
-            if not bMenu then\
-                if x > 1 then\
-                    -- Move cursor left\
-                    setCursor(x - 1, y)\
-                elseif x == 1 and y > 1 then\
-                    setCursor(#tLines[y - 1] + 1, y - 1)\
-                end\
-            else\
-                -- Move menu left\
-                nMenuItem = nMenuItem - 1\
-                if nMenuItem < 1 then\
-                    nMenuItem = #tMenuItems\
-                end\
-                redrawMenu()\
-            end\
-\
-        elseif param == keys.right then\
-            -- Right\
-            if not bMenu then\
-                local nLimit = #tLines[y] + 1\
-                if x < nLimit then\
-                    -- Move cursor right\
-                    setCursor(x + 1, y)\
-                elseif nCompletion and x == #tLines[y] + 1 then\
-                    -- Accept autocomplete\
-                    acceptCompletion()\
-                elseif x == nLimit and y < #tLines then\
-                    -- Go to next line\
-                    setCursor(1, y + 1)\
-                end\
-            else\
-                -- Move menu right\
-                nMenuItem = nMenuItem + 1\
-                if nMenuItem > #tMenuItems then\
-                    nMenuItem = 1\
-                end\
-                redrawMenu()\
-            end\
-\
-        elseif param == keys.delete then\
-            -- Delete\
-            if not bMenu and not bReadOnly then\
-                local nLimit = #tLines[y] + 1\
-                if x < nLimit then\
-                    local sLine = tLines[y]\
-                    tLines[y] = string.sub(sLine, 1, x - 1) .. string.sub(sLine, x + 1)\
-                    recomplete()\
-                    redrawLine(y)\
-                elseif y < #tLines then\
-                    tLines[y] = tLines[y] .. tLines[y + 1]\
-                    table.remove(tLines, y + 1)\
-                    recomplete()\
-                    redrawText()\
-                end\
-            end\
-\
-        elseif param == keys.backspace then\
-            -- Backspace\
-            if not bMenu and not bReadOnly then\
-                if x > 1 then\
-                    -- Remove character\
-                    local sLine = tLines[y]\
-                    if x > 4 and string.sub(sLine, x - 4, x - 1) == \"    \" and not string.sub(sLine, 1, x - 1):find(\"%S\") then\
-                        tLines[y] = string.sub(sLine, 1, x - 5) .. string.sub(sLine, x)\
-                        setCursor(x - 4, y)\
-                    else\
-                        tLines[y] = string.sub(sLine, 1, x - 2) .. string.sub(sLine, x)\
-                        setCursor(x - 1, y)\
-                    end\
-                elseif y > 1 then\
-                    -- Remove newline\
-                    local sPrevLen = #tLines[y - 1]\
-                    tLines[y - 1] = tLines[y - 1] .. tLines[y]\
-                    table.remove(tLines, y)\
-                    setCursor(sPrevLen + 1, y - 1)\
-                    redrawText()\
-                end\
-            end\
-\
-        elseif param == keys.enter or param == keys.numPadEnter then\
-            -- Enter/Numpad Enter\
-            if not bMenu and not bReadOnly then\
-                -- Newline\
-                local sLine = tLines[y]\
-                local _, spaces = string.find(sLine, \"^[ ]+\")\
-                if not spaces then\
-                    spaces = 0\
-                end\
-                tLines[y] = string.sub(sLine, 1, x - 1)\
-                table.insert(tLines, y + 1, string.rep(' ', spaces) .. string.sub(sLine, x))\
-                setCursor(spaces + 1, y + 1)\
-                redrawText()\
-\
-            elseif bMenu then\
-                -- Menu selection\
-                doMenuItem(nMenuItem)\
-\
-            end\
-\
-        elseif param == keys.leftCtrl or param == keys.rightCtrl then\
-            -- Menu toggle\
-            bMenu = not bMenu\
-            if bMenu then\
-                term.setCursorBlink(false)\
-            else\
-                term.setCursorBlink(true)\
-            end\
-            redrawMenu()\
-        elseif param == keys.rightAlt then\
-            if bMenu then\
-                bMenu = false\
-                term.setCursorBlink(true)\
-                redrawMenu()\
-            end\
-        end\
-\
-    elseif sEvent == \"char\" then\
-        if not bMenu and not bReadOnly then\
-            -- Input text\
-            local sLine = tLines[y]\
-            tLines[y] = string.sub(sLine, 1, x - 1) .. param .. string.sub(sLine, x)\
-            setCursor(x + 1, y)\
-\
-        elseif bMenu then\
-            -- Select menu items\
-            for n, sMenuItem in ipairs(tMenuItems) do\
-                if string.lower(string.sub(sMenuItem, 1, 1)) == string.lower(param) then\
-                    doMenuItem(n)\
-                    break\
-                end\
-            end\
-        end\
-\
-    elseif sEvent == \"paste\" then\
-        if not bReadOnly then\
-            -- Close menu if open\
-            if bMenu then\
-                bMenu = false\
-                term.setCursorBlink(true)\
-                redrawMenu()\
-            end\
-            -- Input text\
-            local sLine = tLines[y]\
-            tLines[y] = string.sub(sLine, 1, x - 1) .. param .. string.sub(sLine, x)\
-            setCursor(x + #param , y)\
-        end\
-\
-    elseif sEvent == \"mouse_click\" then\
-        local cx, cy = param2, param3\
-        if not bMenu then\
-            if param == 1 then\
-                -- Left click\
-                if cy < h then\
-                    local newY = math.min(math.max(scrollY + cy, 1), #tLines)\
-                    local newX = math.min(math.max(scrollX + cx, 1), #tLines[newY] + 1)\
-                    setCursor(newX, newY)\
-                else\
-                    bMenu = true\
-                    redrawMenu()\
-                end\
-            end\
-        else\
-            if cy == h then\
-                local nMenuPosEnd = 1\
-                local nMenuPosStart = 1\
-                for n, sMenuItem in ipairs(tMenuItems) do\
-                    nMenuPosEnd = nMenuPosEnd + #sMenuItem + 1\
-                    if cx > nMenuPosStart and cx < nMenuPosEnd then\
-                        doMenuItem(n)\
-                    end\
-                    nMenuPosEnd = nMenuPosEnd + 1\
-                    nMenuPosStart = nMenuPosEnd\
-                end\
-            else\
-                bMenu = false\
-                term.setCursorBlink(true)\
-                redrawMenu()\
-            end\
-        end\
-\
-    elseif sEvent == \"mouse_scroll\" then\
-        if not bMenu then\
-            if param == -1 then\
-                -- Scroll up\
-                if scrollY > 0 then\
-                    -- Move cursor up\
-                    scrollY = scrollY - 1\
-                    redrawText()\
-                end\
-\
-            elseif param == 1 then\
-                -- Scroll down\
-                local nMaxScroll = #tLines - (h - 1)\
-                if scrollY < nMaxScroll then\
-                    -- Move cursor down\
-                    scrollY = scrollY + 1\
-                    redrawText()\
-                end\
-\
-            end\
-        end\
-\
-    elseif sEvent == \"term_resize\" then\
-        w, h = term.getSize()\
-        setCursor(x, y)\
-        redrawMenu()\
-        redrawText()\
-\
-    end\
-end\
-\
--- Cleanup\
-term.clear()\
-term.setCursorBlink(false)\
-term.setCursorPos(1, 1)\
-",
-  [ "help.lua" ] = "-- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe\
---\
--- SPDX-License-Identifier: LicenseRef-CCPL\
-\
-local tArgs = { ... }\
-local sTopic\
-if #tArgs > 0 then\
-    sTopic = tArgs[1]\
-else\
-    sTopic = \"intro\"\
-end\
-\
-if sTopic == \"index\" then\
-    print(\"Help topics available:\")\
-    local tTopics = help.topics()\
-    textutils.pagedTabulate(tTopics)\
-    return\
-end\
-\
-local strings = require \"cc.strings\"\
-\
-local function min_of(a, b, default)\
-    if not a and not b then return default end\
-    if not a then return b end\
-    if not b then return a end\
-    return math.min(a, b)\
-end\
-\
---[[- Parse a markdown string, extracting headings and highlighting some basic\
-constructs.\
-The implementation of this is horrible. SquidDev shouldn't be allowed to write\
-parsers, especially ones they think might be \"performance critical\".\
-]]\
-local function parse_markdown(text)\
-    local len = #text\
-    local oob = len + 1\
-\
-    -- Some patterns to match headers and bullets on the start of lines.\
-    -- The `%f[^\\n\\0]` is some wonderful logic to match the start of a line /or/\
-    -- the start of the document.\
-    local heading = \"%f[^\\n%z](#+ +)([^\\n]*)\"\
-    local bullet = \"%f[^\\n%z]( *)[.*]( +)\"\
-    local code = \"`([^`]+)`\"\
-\
-    local new_text, fg, bg = \"\", \"\", \"\"\
-    local function append(txt, fore, back)\
-        new_text = new_text .. txt\
-        fg = fg .. (fore or \"0\"):rep(#txt)\
-        bg = bg .. (back or \"f\"):rep(#txt)\
-    end\
-\
-    local next_header = text:find(heading)\
-    local next_bullet = text:find(bullet)\
-    local next_block = min_of(next_header, next_bullet, oob)\
-\
-    local next_code, next_code_end = text:find(code)\
-\
-    local sections = {}\
-\
-    local start = 1\
-    while start <= len do\
-        if start == next_block then\
-            if start == next_header then\
-                local _, fin, head, content = text:find(heading, start)\
-                sections[#new_text + 1] = content\
-                append(head .. content, \"4\", \"f\")\
-                start = fin + 1\
-\
-                next_header = text:find(heading, start)\
-            else\
-                local _, fin, space, content = text:find(bullet, start)\
-                append(space .. \"\\7\" .. content)\
-                start = fin + 1\
-\
-                next_bullet = text:find(bullet, start)\
-            end\
-\
-            next_block = min_of(next_header, next_bullet, oob)\
-        elseif next_code and next_code_end < next_block then\
-            -- Basic inline code blocks\
-            if start < next_code then append(text:sub(start, next_code - 1)) end\
-            local content = text:match(code, next_code)\
-            append(content, \"0\", \"7\")\
-\
-            start = next_code_end + 1\
-            next_code, next_code_end = text:find(code, start)\
-        else\
-            -- Normal text\
-            append(text:sub(start, next_block - 1))\
-            start = next_block\
-\
-            -- Rescan for a new code block\
-            if next_code then next_code, next_code_end = text:find(code, start) end\
-        end\
-    end\
-\
-    return new_text, fg, bg, sections\
-end\
-\
-local function word_wrap_basic(text, width)\
-    local lines, fg, bg = strings.wrap(text, width), {}, {}\
-    local fg_line, bg_line = (\"0\"):rep(width), (\"f\"):rep(width)\
-\
-    -- Normalise the strings suitable for use with blit. We could skip this and\
-    -- just use term.write, but saves us a clearLine call.\
-    for k, line in pairs(lines) do\
-        lines[k] = strings.ensure_width(line, width)\
-        fg[k] = fg_line\
-        bg[k] = bg_line\
-    end\
-\
-    return lines, fg, bg, {}\
-end\
-\
-local function word_wrap_markdown(text, width)\
-    -- Add in styling for Markdown-formatted text.\
-    local text, fg, bg, sections = parse_markdown(text)\
-\
-    local lines = strings.wrap(text, width)\
-    local fglines, bglines, section_list, section_n = {}, {}, {}, 1\
-\
-    -- Normalise the strings suitable for use with blit. We could skip this and\
-    -- just use term.write, but saves us a clearLine call.\
-    local start = 1\
-    for k, line in pairs(lines) do\
-        -- I hate this with a burning passion, but it works!\
-        local pos = text:find(line, start, true)\
-        lines[k], fglines[k], bglines[k] =\
-            strings.ensure_width(line, width),\
-            strings.ensure_width(fg:sub(pos, pos + #line), width),\
-            strings.ensure_width(bg:sub(pos, pos + #line), width)\
-\
-        if sections[pos] then\
-            section_list[section_n], section_n = { content = sections[pos], offset = k - 1 }, section_n + 1\
-        end\
-\
-        start = pos + 1\
-    end\
-\
-    return lines, fglines, bglines, section_list\
-end\
-\
-local sFile = help.lookup(sTopic)\
-local file = sFile ~= nil and io.open(sFile) or nil\
-if not file then\
-    printError(\"No help available\")\
-    return\
-end\
-\
-local contents = file:read(\"*a\")\
-file:close()\
--- Trim trailing newlines from the file to avoid displaying a blank line.\
-if contents:sub(-1) == \"\\n\" then contents:sub(1, -2) end\
-\
-local word_wrap = sFile:sub(-3) == \".md\" and word_wrap_markdown or word_wrap_basic\
-local width, height = term.getSize()\
-local content_height = height - 1 -- Height of the content box.\
-local lines, fg, bg, sections = word_wrap(contents, width)\
-local print_height = #lines\
-\
--- If we fit within the screen, just display without pagination.\
-if print_height <= content_height then\
-    local _, y = term.getCursorPos()\
-    for i = 1, print_height do\
-        if y + i - 1 > height then\
-            term.scroll(1)\
-            term.setCursorPos(1, height)\
-        else\
-            term.setCursorPos(1, y + i - 1)\
-        end\
-\
-        term.blit(lines[i], fg[i], bg[i])\
-    end\
-    return\
-end\
-\
-local current_section = nil\
-local offset = 0\
-\
---- Find the currently visible section, or nil if this document has no sections.\
---\
--- This could potentially be a binary search, but right now it's not worth it.\
-local function find_section()\
-    for i = #sections, 1, -1 do\
-        if sections[i].offset <= offset then\
-            return i\
-        end\
-    end\
-end\
-\
-local function draw_menu()\
-    term.setTextColor(colors.yellow)\
-    term.setCursorPos(1, height)\
-    term.clearLine()\
-\
-    local tag = \"Help: \" .. sTopic\
-    if current_section then\
-        tag = tag .. (\" (%s)\"):format(sections[current_section].content)\
-    end\
-    term.write(tag)\
-\
-    if width >= #tag + 16 then\
-        term.setCursorPos(width - 14, height)\
-        term.write(\"Press Q to exit\")\
-    end\
-end\
-\
-\
-local function draw()\
-    for y = 1, content_height do\
-        term.setCursorPos(1, y)\
-        if y + offset > print_height then\
-            -- Should only happen if we resize the terminal to a larger one\
-            -- than actually needed for the current text.\
-            term.clearLine()\
-        else\
-            term.blit(lines[y + offset], fg[y + offset], bg[y + offset])\
-        end\
-    end\
-\
-    local new_section = find_section()\
-    if new_section ~= current_section then\
-        current_section = new_section\
-        draw_menu()\
-    end\
-end\
-\
-draw()\
-draw_menu()\
-\
-while true do\
-    local event, param = os.pullEventRaw()\
-    if event == \"key\" then\
-        if param == keys.up and offset > 0 then\
-            offset = offset - 1\
-            draw()\
-        elseif param == keys.down and offset < print_height - content_height then\
-            offset = offset + 1\
-            draw()\
-        elseif param == keys.pageUp and offset > 0 then\
-            offset = math.max(offset - content_height + 1, 0)\
-            draw()\
-        elseif param == keys.pageDown and offset < print_height - content_height then\
-            offset = math.min(offset + content_height - 1, print_height - content_height)\
-            draw()\
-        elseif param == keys.home then\
-            offset = 0\
-            draw()\
-        elseif param == keys.left and current_section and current_section > 1 then\
-            offset = sections[current_section - 1].offset\
-            draw()\
-        elseif param == keys.right and current_section and current_section < #sections then\
-            offset = sections[current_section + 1].offset\
-            draw()\
-        elseif param == keys[\"end\"] then\
-            offset = print_height - content_height\
-            draw()\
-        elseif param == keys.q then\
-            require \"cc.internal.event\".discard_char()\
-            break\
-        end\
-    elseif event == \"mouse_scroll\" then\
-        if param < 0 and offset > 0 then\
-            offset = offset - 1\
-            draw()\
-        elseif param > 0 and offset <= print_height - content_height then\
-            offset = offset + 1\
-            draw()\
-        end\
-    elseif event == \"term_resize\" then\
-        local new_width, new_height = term.getSize()\
-\
-        if new_width ~= width then\
-            lines, fg, bg = word_wrap(contents, new_width)\
-            print_height = #lines\
-        end\
-\
-        width, height = new_width, new_height\
-        content_height = height - 1\
-        offset = math.max(math.min(offset, print_height - content_height), 0)\
-        draw()\
-        draw_menu()\
-    elseif event == \"terminate\" then\
-        break\
-    end\
-end\
-\
-term.setCursorPos(1, 1)\
-term.clear()\
+fs.move(sSource, sDest)\
 ",
 }
