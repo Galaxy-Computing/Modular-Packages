@@ -1,0 +1,31 @@
+return {
+  [ "init.lua" ] = "local oldfs = {}\
+oldfs.open = fs.open\
+\
+if not module.config[\"fs-extensions\"] then\
+    module.createConfig(\"fs-extensions\")\
+    module.config[\"fs-extensions\"].protectedpaths = {\"modular/modules\"}\
+    module.saveConfig()\
+end\
+\
+function string.starts(String,start)\
+    return string.sub(String,1,string.len(start))==start\
+end\
+ \
+function fs.open(path,mode)\
+    if mode ~= \"r\" then\
+        if module.config.users[module.currentUser][2] ~= 0 then\
+            for _,ppath in ipairs(module.config[\"fs-extensions\"].protectedpaths) do\
+                if string.starts(path,ppath) then\
+                    error(\"Access denied\")\
+                elseif string.starts(path,\"/\"..ppath) then\
+                    error(\"Access denied\")\
+                end\
+            end\
+        end\
+    end\
+    local f = oldfs.open(path,mode)\
+    return f\
+end",
+  [ "meta.lua" ] = "return {\"fs-extensions\",false,\"1.0-1\",true}",
+}
