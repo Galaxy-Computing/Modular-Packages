@@ -6,6 +6,7 @@ local installpackages = { -- packages we install with the main two
     "craftos-bin",
     "shell",
     "sudo",
+    "fs-extensions",
 }
 local tArgs = {...}
 
@@ -45,6 +46,7 @@ end
 
 if #tArgs == 1 then
     if tArgs[1] == "postreboot" then -- we're after the reboot
+        module.currentUser = "root"
         screen("   The installer is now installing software.","")
         for i,name in ipairs(installpackages) do
             screen("   The installer is now installing software.","Installing "..name.."... ("..i.."/"..#installpackages..")")
